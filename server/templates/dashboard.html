@@ -8,15 +8,29 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', 'Segoe UI', Roboto, Arial, sans-serif;
             margin: 0;
-            padding: 0 20px 40px;
-            background-color: #f6f8fa;
+            padding: 0 20px 48px;
+            background: linear-gradient(180deg, #f3f8ff 0%, #eef2ff 100%);
+            color: #1f2933;
         }
 
         header {
-            padding: 20px 0 10px;
+            padding: 32px 0 16px;
             text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            font-weight: 600;
+            color: #122659;
+        }
+
+        header p {
+            margin: 8px 0 0;
+            color: #5b6b82;
+            font-size: 1rem;
         }
 
         .filters {
@@ -27,17 +41,19 @@
         }
 
         .status {
-            max-width: 900px;
-            margin: 0 auto 20px;
-            background: #ffffff;
-            padding: 16px 20px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            max-width: 1080px;
+            margin: 0 auto 24px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            padding: 20px 24px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(15, 35, 95, 0.08);
         }
 
         .status-label {
-            font-weight: bold;
+            font-weight: 600;
             margin-right: 8px;
+            color: #2b3f64;
         }
 
         .status-hostlist {
@@ -45,27 +61,45 @@
             padding: 0;
             margin: 12px 0 0;
             display: grid;
-            gap: 4px;
+            gap: 6px;
+            color: #4c5f7c;
+            font-size: 0.95rem;
         }
 
         .chart-container {
-            max-width: 900px;
-            margin: 0 auto 30px;
+            max-width: 1080px;
+            margin: 0 auto 32px;
             background: #ffffff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 24px 28px;
+            border-radius: 18px;
+            box-shadow: 0 24px 48px rgba(12, 40, 90, 0.08);
+        }
+
+        .chart-container h2 {
+            margin-top: 0;
+            color: #1a2a4a;
+            font-size: 1.2rem;
         }
 
         label {
-            font-weight: bold;
+            font-weight: 600;
             margin-right: 8px;
+            color: #31446c;
         }
 
         select {
-            padding: 6px 10px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid #c8d4f2;
+            background: #ffffff;
+            color: #1f2933;
+            box-shadow: 0 6px 12px rgba(80, 112, 196, 0.12);
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #5a7bff;
+            box-shadow: 0 0 0 3px rgba(90, 123, 255, 0.25);
         }
 
         canvas {
@@ -73,8 +107,8 @@
         }
 
         .details {
-            max-width: 1200px;
-            margin: 0 auto 20px;
+            max-width: 1080px;
+            margin: 0 auto 32px;
         }
 
         .details.hidden {
@@ -83,48 +117,122 @@
 
         .cards-grid {
             display: grid;
-            gap: 16px;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         }
 
         .card {
-            background: #ffffff;
-            border-radius: 12px;
-            padding: 18px 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            padding: 22px 24px;
+            box-shadow: 0 24px 48px rgba(12, 40, 90, 0.08);
             display: flex;
             flex-direction: column;
+            gap: 16px;
+            border: 1px solid rgba(93, 121, 255, 0.08);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
             gap: 12px;
+        }
+
+        .card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, #eff3ff 0%, #dae2ff 100%);
+            color: #3b55e6;
         }
 
         .card h3 {
             margin: 0;
-            font-size: 1.05rem;
-            color: #1a2a4a;
-        }
-
-        .card-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: grid;
-            gap: 6px;
-        }
-
-        .card-list li {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.95rem;
-            color: #1f2933;
-        }
-
-        .card-label {
+            font-size: 1.1rem;
             font-weight: 600;
-            color: #516173;
+            color: #142857;
         }
 
-        .card-value {
+        .card-body {
+            display: grid;
+            gap: 12px;
+        }
+
+        .stat-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .stat-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .stat-label {
+            font-weight: 600;
+            color: #5a6d8f;
+        }
+
+        .stat-value {
+            font-weight: 500;
+            color: #1f2933;
             text-align: right;
+        }
+
+        .stat-value.emphasis {
+            font-weight: 700;
+            color: #253ef8;
+        }
+
+        .progress {
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            background: #edf1ff;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            border-radius: 999px;
+            transition: width 0.4s ease;
+        }
+
+        .progress-bar.cpu {
+            background: linear-gradient(135deg, #52e5ff 0%, #436dff 100%);
+        }
+
+        .progress-bar.memory {
+            background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%);
+        }
+
+        .progress-bar.disk {
+            background: linear-gradient(135deg, #73f1a9 0%, #36d68d 100%);
+        }
+
+        .stat-foot {
+            font-size: 0.92rem;
+            color: #4c5f7c;
+        }
+
+        .uptime-highlight {
+            font-size: 2.1rem;
+            font-weight: 700;
+            color: #1e46ff;
+            text-align: center;
+        }
+
+        .uptime-subtext {
+            text-align: center;
+            color: #5a6d8f;
+            font-size: 0.95rem;
         }
     </style>
 </head>
@@ -159,64 +267,96 @@
 
     <section id="hostDetailsSection" class="details hidden">
         <div class="cards-grid">
-            <div class="card">
-                <h3>CPU Information</h3>
-                <ul class="card-list">
-                    <li><span class="card-label">Processor</span><span class="card-value" id="cpuProcessor">—</span></li>
-                    <li><span class="card-label">Cores</span><span class="card-value" id="cpuCores">—</span></li>
-                    <li><span class="card-label">Frequency</span><span class="card-value" id="cpuFrequency">—</span></li>
-                    <li><span class="card-label">Usage</span><span class="card-value" id="cpuUsage">—</span></li>
-                </ul>
-            </div>
+            <article class="card">
+                <div class="card-header">
+                    <div class="card-icon">🧠</div>
+                    <h3>CPU Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stat-grid">
+                        <div class="stat-row"><span class="stat-label">Processor</span><span class="stat-value" id="cpuProcessor">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Cores</span><span class="stat-value" id="cpuCores">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Speed</span><span class="stat-value" id="cpuSpeed">—</span></div>
+                    </div>
+                    <div class="progress"><div class="progress-bar cpu" id="cpuUsageBar"></div></div>
+                    <div class="stat-foot" id="cpuUsageText">CPU Usage: —</div>
+                </div>
+            </article>
 
-            <div class="card">
-                <h3>Memory Usage</h3>
-                <ul class="card-list">
-                    <li><span class="card-label">RAM Usage</span><span class="card-value" id="memoryUsage">—</span></li>
-                    <li><span class="card-label">Total RAM</span><span class="card-value" id="memoryTotal">—</span></li>
-                    <li><span class="card-label">Available</span><span class="card-value" id="memoryAvailable">—</span></li>
-                    <li><span class="card-label">Swap</span><span class="card-value" id="memorySwap">—</span></li>
-                </ul>
-            </div>
+            <article class="card">
+                <div class="card-header">
+                    <div class="card-icon">💾</div>
+                    <h3>Memory Usage</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stat-grid">
+                        <div class="stat-row"><span class="stat-label">RAM Usage</span><span class="stat-value" id="memoryUsageText">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Total RAM</span><span class="stat-value" id="memoryTotal">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Available</span><span class="stat-value" id="memoryAvailable">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Swap</span><span class="stat-value" id="memorySwap">—</span></div>
+                    </div>
+                    <div class="progress"><div class="progress-bar memory" id="memoryUsageBar"></div></div>
+                </div>
+            </article>
 
-            <div class="card">
-                <h3>Storage Usage</h3>
-                <ul class="card-list">
-                    <li><span class="card-label">Disk Usage</span><span class="card-value" id="diskUsage">—</span></li>
-                    <li><span class="card-label">Total</span><span class="card-value" id="diskTotal">—</span></li>
-                    <li><span class="card-label">Free Space</span><span class="card-value" id="diskFree">—</span></li>
-                    <li><span class="card-label">Mount</span><span class="card-value" id="diskMount">—</span></li>
-                </ul>
-            </div>
+            <article class="card">
+                <div class="card-header">
+                    <div class="card-icon">🗄️</div>
+                    <h3>Storage Usage</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stat-grid">
+                        <div class="stat-row"><span class="stat-label">Disk Usage</span><span class="stat-value" id="diskUsageText">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Total Capacity</span><span class="stat-value" id="diskTotal">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Free Space</span><span class="stat-value" id="diskFree">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Mount</span><span class="stat-value" id="diskMount">—</span></div>
+                    </div>
+                    <div class="progress"><div class="progress-bar disk" id="diskUsageBar"></div></div>
+                </div>
+            </article>
 
-            <div class="card">
-                <h3>System Information</h3>
-                <ul class="card-list">
-                    <li><span class="card-label">Hostname</span><span class="card-value" id="systemHostname">—</span></li>
-                    <li><span class="card-label">Operating System</span><span class="card-value" id="systemOS">—</span></li>
-                    <li><span class="card-label">Architecture</span><span class="card-value" id="systemArchitecture">—</span></li>
-                    <li><span class="card-label">Platform</span><span class="card-value" id="systemPlatform">—</span></li>
-                    <li><span class="card-label">Model</span><span class="card-value" id="systemModel">—</span></li>
-                </ul>
-            </div>
+            <article class="card">
+                <div class="card-header">
+                    <div class="card-icon">💻</div>
+                    <h3>System Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stat-grid">
+                        <div class="stat-row"><span class="stat-label">Hostname</span><span class="stat-value" id="systemHostname">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Operating System</span><span class="stat-value" id="systemOS">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Architecture</span><span class="stat-value" id="systemArchitecture">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Platform</span><span class="stat-value" id="systemPlatform">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Model</span><span class="stat-value" id="systemModel">—</span></div>
+                    </div>
+                </div>
+            </article>
 
-            <div class="card">
-                <h3>Network Information</h3>
-                <ul class="card-list">
-                    <li><span class="card-label">Interface</span><span class="card-value" id="networkInterface">—</span></li>
-                    <li><span class="card-label">IPv4 Address</span><span class="card-value" id="networkIPv4">—</span></li>
-                    <li><span class="card-label">Speed</span><span class="card-value" id="networkSpeed">—</span></li>
-                    <li><span class="card-label">MTU</span><span class="card-value" id="networkMtu">—</span></li>
-                </ul>
-            </div>
+            <article class="card">
+                <div class="card-header">
+                    <div class="card-icon">📡</div>
+                    <h3>Network Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stat-grid">
+                        <div class="stat-row"><span class="stat-label">Interface</span><span class="stat-value" id="networkInterface">—</span></div>
+                        <div class="stat-row"><span class="stat-label">IPv4 Address</span><span class="stat-value emphasis" id="networkIPv4">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Link Speed</span><span class="stat-value" id="networkSpeed">—</span></div>
+                        <div class="stat-row"><span class="stat-label">MTU</span><span class="stat-value" id="networkMtu">—</span></div>
+                    </div>
+                </div>
+            </article>
 
-            <div class="card">
-                <h3>System Uptime</h3>
-                <ul class="card-list">
-                    <li><span class="card-label">Uptime</span><span class="card-value" id="uptimeHuman">—</span></li>
-                    <li><span class="card-label">Boot Time</span><span class="card-value" id="uptimeBoot">—</span></li>
-                </ul>
-            </div>
+            <article class="card">
+                <div class="card-header">
+                    <div class="card-icon">⏱️</div>
+                    <h3>System Uptime</h3>
+                </div>
+                <div class="card-body">
+                    <div class="uptime-highlight" id="uptimeHuman">—</div>
+                    <div class="uptime-subtext">System has been running</div>
+                    <div class="stat-foot" id="uptimeBoot">—</div>
+                </div>
+            </article>
         </div>
     </section>
 
@@ -256,13 +396,13 @@
         const detailElements = {
             cpuProcessor: document.getElementById('cpuProcessor'),
             cpuCores: document.getElementById('cpuCores'),
-            cpuFrequency: document.getElementById('cpuFrequency'),
-            cpuUsage: document.getElementById('cpuUsage'),
-            memoryUsage: document.getElementById('memoryUsage'),
+            cpuSpeed: document.getElementById('cpuSpeed'),
+            cpuUsageText: document.getElementById('cpuUsageText'),
+            memoryUsageText: document.getElementById('memoryUsageText'),
             memoryTotal: document.getElementById('memoryTotal'),
             memoryAvailable: document.getElementById('memoryAvailable'),
             memorySwap: document.getElementById('memorySwap'),
-            diskUsage: document.getElementById('diskUsage'),
+            diskUsageText: document.getElementById('diskUsageText'),
             diskTotal: document.getElementById('diskTotal'),
             diskFree: document.getElementById('diskFree'),
             diskMount: document.getElementById('diskMount'),
@@ -277,6 +417,12 @@
             networkMtu: document.getElementById('networkMtu'),
             uptimeHuman: document.getElementById('uptimeHuman'),
             uptimeBoot: document.getElementById('uptimeBoot'),
+        };
+
+        const progressBars = {
+            cpuUsageBar: document.getElementById('cpuUsageBar'),
+            memoryUsageBar: document.getElementById('memoryUsageBar'),
+            diskUsageBar: document.getElementById('diskUsageBar'),
         };
 
         let lastDetailsHostname = null;
@@ -354,6 +500,21 @@
             }
         }
 
+        function setProgressBar(id, percent) {
+            const bar = progressBars[id];
+            if (!bar) {
+                return;
+            }
+            if (typeof percent !== 'number' || Number.isNaN(percent)) {
+                bar.style.width = '0%';
+                bar.setAttribute('aria-valuenow', '0');
+                return;
+            }
+            const clamped = Math.min(Math.max(percent, 0), 100);
+            bar.style.width = `${clamped.toFixed(1)}%`;
+            bar.setAttribute('aria-valuenow', clamped.toFixed(1));
+        }
+
         function formatPercent(value) {
             if (typeof value !== 'number' || Number.isNaN(value)) {
                 return '—';
@@ -426,12 +587,23 @@
             const cpu = details.cpu || {};
             setDetailField('cpuProcessor', cpu.processor || '—');
             setDetailField('cpuCores', buildCoreSummary(cpu.logical_cores, cpu.physical_cores));
-            setDetailField('cpuFrequency', formatFrequencyMHz(cpu.frequency_mhz));
-            setDetailField('cpuUsage', formatPercent(cpu.percent));
+            setDetailField('cpuSpeed', formatFrequencyMHz(cpu.frequency_mhz));
+            const cpuPercent = typeof cpu.percent === 'number' ? cpu.percent : null;
+            const cpuUsageText = cpuPercent === null ? 'CPU Usage: —' : `CPU Usage: ${cpuPercent.toFixed(1)}%`;
+            setDetailField('cpuUsageText', cpuUsageText);
+            setProgressBar('cpuUsageBar', cpuPercent ?? 0);
 
             const memory = details.memory || {};
-            setDetailField('memoryUsage', formatPercent(memory.percent));
-            setDetailField('memoryTotal', formatBytes(memory.total));
+            const memoryPercent = typeof memory.percent === 'number' ? memory.percent : null;
+            const memoryUsed = typeof memory.used === 'number' ? memory.used : null;
+            const memoryTotal = typeof memory.total === 'number' ? memory.total : null;
+            let memoryUsageText = '—';
+            if (memoryUsed !== null && memoryTotal) {
+                const percentText = memoryPercent !== null ? formatPercent(memoryPercent) : '—';
+                memoryUsageText = `${formatBytes(memoryUsed)} / ${formatBytes(memoryTotal)} (${percentText})`;
+            }
+            setDetailField('memoryUsageText', memoryUsageText);
+            setDetailField('memoryTotal', formatBytes(memoryTotal));
             setDetailField('memoryAvailable', formatBytes(memory.available));
             const swap = details.swap || {};
             let swapText = 'Disabled';
@@ -440,12 +612,21 @@
                 swapText = `${formatBytes(swap.total)}${swapPercent}`;
             }
             setDetailField('memorySwap', swapText);
+            setProgressBar('memoryUsageBar', memoryPercent ?? 0);
 
             const disk = details.disk || {};
-            setDetailField('diskUsage', formatPercent(disk.percent));
-            setDetailField('diskTotal', formatBytes(disk.total));
+            const diskPercent = typeof disk.percent === 'number' ? disk.percent : null;
+            const diskUsed = typeof disk.used === 'number' ? disk.used : null;
+            const diskTotal = typeof disk.total === 'number' ? disk.total : null;
+            let diskUsageText = formatPercent(diskPercent);
+            if (diskUsed !== null && diskTotal) {
+                diskUsageText = `${formatBytes(diskUsed)} / ${formatBytes(diskTotal)} (${formatPercent(diskPercent)})`;
+            }
+            setDetailField('diskUsageText', diskUsageText);
+            setDetailField('diskTotal', formatBytes(diskTotal));
             setDetailField('diskFree', formatBytes(disk.free));
             setDetailField('diskMount', disk.mount || '—');
+            setProgressBar('diskUsageBar', diskPercent ?? 0);
 
             const system = details.system || {};
             setDetailField('systemHostname', system.hostname || '—');
@@ -463,7 +644,8 @@
 
             const uptime = details.uptime || {};
             setDetailField('uptimeHuman', uptime.human || '—');
-            setDetailField('uptimeBoot', formatDateTime(uptime.boot_time));
+            const bootString = uptime.boot_time ? `Booted ${formatDateTime(uptime.boot_time)}` : 'Boot time unavailable';
+            setDetailField('uptimeBoot', bootString);
         }
 
         function hideDetails() {
