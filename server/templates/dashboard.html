@@ -102,6 +102,28 @@
             box-shadow: 0 0 0 3px rgba(90, 123, 255, 0.25);
         }
 
+        .ghost-button {
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(90, 102, 255, 0.25);
+            background: rgba(255, 255, 255, 0.8);
+            color: #31446c;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 6px 12px rgba(80, 112, 196, 0.15);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .ghost-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(80, 112, 196, 0.2);
+        }
+
+        .ghost-button:focus {
+            outline: none;
+            border-color: #5a7bff;
+        }
+
         canvas {
             max-height: 320px;
         }
@@ -234,6 +256,105 @@
             color: #5a6d8f;
             font-size: 0.95rem;
         }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 28px;
+            width: min(720px, 90vw);
+            box-shadow: 0 30px 60px rgba(15, 35, 95, 0.18);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+            color: #142857;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.4rem;
+            cursor: pointer;
+            color: #5a6d8f;
+        }
+
+        .host-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .host-card {
+            border: 1px solid rgba(93, 121, 255, 0.1);
+            border-radius: 14px;
+            padding: 16px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(245, 248, 255, 0.7);
+        }
+
+        .host-meta {
+            display: grid;
+            gap: 4px;
+            color: #31446c;
+        }
+
+        .host-meta strong {
+            color: #142857;
+        }
+
+        .host-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-secondary,
+        .btn-danger {
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #5dabff 0%, #517dff 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff4757 100%);
+        }
+
+        .btn-secondary:hover,
+        .btn-danger:hover {
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body>
@@ -262,6 +383,11 @@
                 </option>
                 {% endfor %}
             </select>
+        </div>
+        <div>
+            <button id="manageHostsButton" class="ghost-button" type="button" title="Manage hosts">
+                ⚙️ Manage hosts
+            </button>
         </div>
     </section>
 
@@ -360,6 +486,18 @@
         </div>
     </section>
 
+    <div class="modal-overlay hidden" id="hostModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Manage Hosts</h2>
+                <button type="button" id="closeHostModal" class="modal-close" aria-label="Close">✖</button>
+            </div>
+            <div class="host-list" id="hostList">
+                <div>Loading hosts…</div>
+            </div>
+        </div>
+    </div>
+
     <section class="status">
         <div>
             <span class="status-label">Last data received:</span>
@@ -392,6 +530,10 @@
         const lastUpdatedText = document.getElementById('lastUpdatedText');
         const hostUpdateList = document.getElementById('hostUpdateList');
         const detailsSection = document.getElementById('hostDetailsSection');
+        const manageHostsButton = document.getElementById('manageHostsButton');
+        const hostModal = document.getElementById('hostModal');
+        const closeHostModal = document.getElementById('closeHostModal');
+        const hostList = document.getElementById('hostList');
 
         const detailElements = {
             cpuProcessor: document.getElementById('cpuProcessor'),
@@ -427,6 +569,7 @@
 
         let lastDetailsHostname = null;
         let lastDetailsUpdatedAt = null;
+        let knownHosts = new Set(Array.from(hostnameFilter.options).slice(1).map(option => option.value));
 
         const chartConfig = (label, borderColor, backgroundColor) => ({
             type: 'line',
@@ -654,6 +797,142 @@
             lastDetailsUpdatedAt = null;
         }
 
+        function openHostModal() {
+            hostModal.classList.remove('hidden');
+            loadHosts();
+        }
+
+        function closeHostModalFn() {
+            hostModal.classList.add('hidden');
+        }
+
+        function updateHostnameOptions(hosts) {
+            const previous = hostnameFilter.value;
+            knownHosts = new Set(hosts.map(host => host.hostname));
+            hostnameFilter.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'All Hosts';
+            hostnameFilter.appendChild(defaultOption);
+            hosts.forEach(host => {
+                const option = document.createElement('option');
+                option.value = host.hostname;
+                option.textContent = host.hostname;
+                hostnameFilter.appendChild(option);
+            });
+            if (previous && knownHosts.has(previous)) {
+                hostnameFilter.value = previous;
+            } else {
+                hostnameFilter.value = '';
+                if (previous) {
+                    fetchMetrics();
+                }
+            }
+        }
+
+        async function loadHosts() {
+            hostList.innerHTML = '<div>Loading hosts…</div>';
+            try {
+                const response = await fetch('/hosts');
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                const payload = await response.json();
+                const hosts = payload.hosts || [];
+                updateHostnameOptions(hosts);
+                renderHostList(hosts);
+            } catch (error) {
+                console.error('Failed to load hosts', error);
+                hostList.innerHTML = '<div style="color:#ff4757">Failed to load hosts</div>';
+            }
+        }
+
+        function renderHostList(hosts) {
+            if (!hosts.length) {
+                hostList.innerHTML = '<div>No hosts recorded yet.</div>';
+                return;
+            }
+            hostList.innerHTML = '';
+            hosts.forEach(host => {
+                const card = document.createElement('div');
+                card.className = 'host-card';
+
+                const meta = document.createElement('div');
+                meta.className = 'host-meta';
+                const lastSeenText = host.last_seen ? formatTimestamp(host.last_seen) : '—';
+                const detailsUpdated = host.details_updated_at ? formatTimestamp(host.details_updated_at) : '—';
+                meta.innerHTML = `<strong>${host.hostname}</strong>
+                    <span>Metrics stored: ${host.metric_count}</span>
+                    <span>Last seen: ${lastSeenText}</span>
+                    <span>Details updated: ${detailsUpdated}</span>`;
+
+                const actions = document.createElement('div');
+                actions.className = 'host-actions';
+
+                const clearButton = document.createElement('button');
+                clearButton.type = 'button';
+                clearButton.className = 'btn-secondary';
+                clearButton.textContent = 'Clear Metrics';
+                clearButton.addEventListener('click', () => handleClearHost(host.hostname));
+
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'btn-danger';
+                deleteButton.textContent = 'Delete Host';
+                deleteButton.addEventListener('click', () => handleDeleteHost(host.hostname));
+
+                actions.appendChild(clearButton);
+                actions.appendChild(deleteButton);
+
+                card.appendChild(meta);
+                card.appendChild(actions);
+                hostList.appendChild(card);
+            });
+        }
+
+        async function handleClearHost(hostname) {
+            if (!confirm(`Clear stored metrics for ${hostname}?`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`/hosts/${encodeURIComponent(hostname)}/clean`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                await loadHosts();
+                fetchMetrics();
+            } catch (error) {
+                console.error('Failed to clear host metrics', error);
+                alert('Failed to clear metrics. Check server logs for details.');
+            }
+        }
+
+        async function handleDeleteHost(hostname) {
+            if (!confirm(`Delete host ${hostname} and all stored data?`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`/hosts/${encodeURIComponent(hostname)}`, {
+                    method: 'DELETE',
+                });
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                if (hostnameFilter.value === hostname) {
+                    hostnameFilter.value = '';
+                    hideDetails();
+                }
+                await loadHosts();
+                fetchMetrics();
+            } catch (error) {
+                console.error('Failed to delete host', error);
+                alert('Failed to delete host. Check server logs for details.');
+            }
+        }
+
         async function fetchHostDetails(hostname) {
             if (!hostname) {
                 hideDetails();
@@ -733,7 +1012,22 @@
             }
         }
 
-        hostnameFilter.addEventListener('change', fetchMetrics);
+        manageHostsButton.addEventListener('click', openHostModal);
+        closeHostModal.addEventListener('click', closeHostModalFn);
+        hostModal.addEventListener('click', (event) => {
+            if (event.target === hostModal) {
+                closeHostModalFn();
+            }
+        });
+
+        hostnameFilter.addEventListener('change', () => {
+            fetchMetrics();
+            if (hostnameFilter.value) {
+                fetchHostDetails(hostnameFilter.value);
+            } else {
+                hideDetails();
+            }
+        });
         timeframeFilter.addEventListener('change', fetchMetrics);
 
         if (timeframeFilter.value === '' && timeframePresets[defaultTimeframe]) {
@@ -741,6 +1035,7 @@
         }
 
         fetchMetrics();
+        loadHosts();
         setInterval(fetchMetrics, 1000);
     </script>
 </body>

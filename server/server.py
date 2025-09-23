@@ -6,7 +6,7 @@ import sqlite3
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from flask import Flask, jsonify, render_template, request
 
@@ -92,6 +92,62 @@ def upsert_host_details(hostname: str, details: Dict[str, Any]) -> None:
             (hostname, serialized, now_ts),
         )
         conn.commit()
+
+
+def list_hosts() -> List[Dict[str, Any]]:
+    summaries: Dict[str, Dict[str, Any]] = {}
+    with closing(open_connection()) as conn:
+        for row in conn.execute(
+            """
+            SELECT hostname, COUNT(*) AS metric_count, MAX(timestamp) AS last_seen
+            FROM metrics
+            GROUP BY hostname
+            """
+        ):
+            summaries[row["hostname"]] = {
+                "hostname": row["hostname"],
+                "metric_count": row["metric_count"],
+                "last_seen": row["last_seen"],
+                "details_updated_at": None,
+            }
+
+        for row in conn.execute(
+            "SELECT hostname, updated_at FROM host_details"
+        ):
+            summary = summaries.setdefault(
+                row["hostname"],
+                {
+                    "hostname": row["hostname"],
+                    "metric_count": 0,
+                    "last_seen": row["updated_at"],
+                    "details_updated_at": None,
+                },
+            )
+            summary["details_updated_at"] = row["updated_at"]
+            summary["last_seen"] = max(summary.get("last_seen") or 0, row["updated_at"])
+
+    return sorted(summaries.values(), key=lambda item: item["hostname"].lower())
+
+
+def delete_host_metrics(hostname: str) -> int:
+    with closing(open_connection()) as conn:
+        cursor = conn.execute("DELETE FROM metrics WHERE hostname = ?", (hostname,))
+        conn.commit()
+        return cursor.rowcount
+
+
+def delete_host(hostname: str) -> Dict[str, int]:
+    with closing(open_connection()) as conn:
+        metrics_deleted = conn.execute(
+            "DELETE FROM metrics WHERE hostname = ?",
+            (hostname,),
+        ).rowcount
+        details_deleted = conn.execute(
+            "DELETE FROM host_details WHERE hostname = ?",
+            (hostname,),
+        ).rowcount
+        conn.commit()
+    return {"metrics": metrics_deleted, "details": details_deleted}
 
 
 def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable[sqlite3.Row]:
@@ -215,6 +271,23 @@ def details_endpoint():
         return jsonify({"error": "hostname not found"}), 404
 
     return jsonify(record)
+
+
+@app.route("/hosts", methods=["GET"])
+def hosts_endpoint():
+    return jsonify({"hosts": list_hosts()})
+
+
+@app.route("/hosts/<hostname>/clean", methods=["POST"])
+def clean_host(hostname: str):
+    removed = delete_host_metrics(hostname)
+    return jsonify({"status": "ok", "metrics_deleted": removed})
+
+
+@app.route("/hosts/<hostname>", methods=["DELETE"])
+def delete_host_endpoint(hostname: str):
+    outcome = delete_host(hostname)
+    return jsonify({"status": "ok", **outcome})
 
 
 @app.route("/dashboard", methods=["GET"])
