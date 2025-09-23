@@ -76,15 +76,15 @@ Set the required environment variables before running (as shown above). Stop wit
        <array>
          <string>/Users/USERNAME/Library/Python/3.9/bin/system-stats-forwarder</string>
        </array>
-       <key>EnvironmentVariables</key>
-       <dict>
-         <key>MONITORING_SERVER_METRICS_URL</key>
-         <string>http://192.168.0.139:5050/metrics</string>
-         <key>SYSTEM_STATS_URL</key>
-         <string>http://127.0.0.1:5001/system</string>
-         <key>SYSTEM_STATS_FORWARD_INTERVAL</key>
-         <string>30</string>
-         <key>SYSTEM_STATS_FORWARD_LOG_LEVEL</key>
+   <key>EnvironmentVariables</key>
+   <dict>
+     <key>MONITORING_SERVER_METRICS_URL</key>
+      <string>http://192.168.0.139:5050/metrics</string>
+     <key>SYSTEM_STATS_URL</key>
+      <string>http://127.0.0.1:5001/system</string>
+      <key>SYSTEM_STATS_FORWARD_INTERVAL</key>
+      <string>30</string>
+      <key>SYSTEM_STATS_FORWARD_LOG_LEVEL</key>
          <string>info</string>
        </dict>
        <key>RunAtLoad</key>
@@ -152,3 +152,76 @@ WantedBy=multi-user.target
 - Ensure `/system` is reachable; the forwarder logs failures to stderr/stdout.
 - LibreSSL warnings on macOS stem from the system Python; install Python via Homebrew (OpenSSL) to silence them.
 - If disk metrics should track a different mount (e.g. `/data`), set `SYSTEM_STATS_DISK_PATH` accordingly.
+
+## Raspberry Pi Installation Notes
+
+On modern Raspberry Pi OS releases (`/usr/bin/python3` is “externally managed”), use:
+
+```sh
+python3 -m pip install --break-system-packages .
+```
+
+If `pip` complains about stale egg-info permissions, remove the folder first:
+
+```sh
+sudo rm -rf system_stats_service.egg-info
+python3 -m pip install --break-system-packages .
+```
+
+You can also wrap the services with systemd using a single command:
+
+```sh
+sudo bash -c '
+cat >/etc/systemd/system/system-stats.service <<EOF
+[Unit]
+Description=System Stats API Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Environment=SYSTEM_STATS_PORT=5001
+Environment=SYSTEM_STATS_LOG_LEVEL=info
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env system-stats-service
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat >/etc/systemd/system/system-stats-forwarder.service <<EOF
+[Unit]
+Description=System Stats Forwarder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=MONITORING_SERVER_METRICS_URL=http://192.168.0.139:5050/metrics
+Environment=SYSTEM_STATS_URL=http://127.0.0.1:5001/system
+Environment=SYSTEM_STATS_FORWARD_INTERVAL=30
+Environment=SYSTEM_STATS_FORWARD_LOG_LEVEL=info
+ExecStart=/usr/bin/env system-stats-forwarder
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now system-stats.service
+systemctl enable --now system-stats-forwarder.service
+'
+```
+
+Adjust `User`, paths, or URLs as needed (`pi` vs. your username, monitoring server IP, etc.).
