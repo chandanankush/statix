@@ -2,6 +2,10 @@
 
 This project combines a host-native system stats agent with a lightweight monitoring server and dashboard. The agent gathers CPU, memory, disk, network, and uptime information directly from each machine; the server persists readings, serves APIs, and renders a responsive dashboard with trend charts and host summary cards.
 
+<img width="5120" height="4448" alt="screencapture-piserver-local-5050-dashboard-2025-09-23-23_58_44" src="https://github.com/user-attachments/assets/5a75b62e-ff05-4f0d-b133-2167372034b7" />
+
+
+
 ## Quick Usage
 1. **Start the monitoring server** (via Docker Compose):
    ```sh
