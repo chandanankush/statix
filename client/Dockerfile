@@ -9,8 +9,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY client.py /app/client.py
+COPY pyproject.toml setup.py README.md /app/
+COPY system_stats /app/system_stats
+COPY service /app/service
 
-RUN pip install --no-cache-dir psutil requests
+RUN pip install --no-cache-dir .
 
-CMD ["python", "client.py"]
+EXPOSE 5001
+
+CMD ["system-stats-service"]

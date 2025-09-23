@@ -1,5 +1,5 @@
-# Build and run the stack with: docker-compose up --build
-# Dashboard available at: http://localhost:5000/dashboard
+# Build and run the monitoring server with: docker-compose up --build
+# Dashboard available at: http://localhost:5000/dashboard (or ${MONITOR_PORT})
 version: "3.9"
 
 services:
@@ -13,16 +13,6 @@ services:
       - server_data:/app/data
     ports:
       - "${MONITOR_PORT:-5000}:5000"
-
-  client:
-    build:
-      context: ./client
-    restart: unless-stopped
-    environment:
-      SERVER_URL: http://server:5000/metrics
-      SCRAPE_INTERVAL: 30
-    depends_on:
-      - server
 
 volumes:
   server_data:

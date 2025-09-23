@@ -1,0 +1,20 @@
+[Unit]
+Description=System Stats API Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+Group=YOUR_USER
+Environment=SYSTEM_STATS_HOST=0.0.0.0
+Environment=SYSTEM_STATS_PORT=5001
+WorkingDirectory=/opt/system-stats-service
+ExecStart=/usr/local/bin/system-stats-service
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

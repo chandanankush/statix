@@ -1,55 +1,34 @@
 # Monitoring Stack
 
-A lightweight, containerized system monitoring setup with a Python client that ships host metrics to a Flask server for storage and dashboard visualisation.
+A lightweight monitoring server with an optional system stats microservice. The FastAPI-based client runs directly on macOS or Linux to expose host metrics, while the Flask server stores metrics and renders the dashboard.
 
 ## Repository Layout
 ```
-client/                   # Metric collection agent and container definition
+client/                   # System stats FastAPI service (installable package + service templates)
 server/                   # Flask API, dashboard, and container definition
-docker-compose.yml        # Combined stack (client + server)
-docker-compose.server.yml # Server-only deployment
-docker-compose.client.yml # Client-only deployment
+docker-compose.yml        # Monitoring server deployment
+docker-compose.server.yml # Alias compose file for the server
+docker-compose.client.yml # Optional containerised system-stats service (container metrics)
 ARCHITECTURE.md           # High-level overview of interactions and data flow
 README.md                 # Root project guide
 ```
 
 ## Prerequisites
-- Docker Engine 20.10+
+- Docker Engine 20.10+ (for the server container)
 - Docker Compose V2
-- (Optional) Python 3.9+ for local development outside containers
+- Python 3.9+ (for installing/running the system stats service natively)
 
-## Deployment Options
-- **Full stack (default compose file):**
-  ```sh
-  docker-compose up --build
-  ```
-  Visit http://localhost:5000/dashboard.
-
-- **Server only:**
-  ```sh
-  docker-compose -f docker-compose.server.yml up --build
-  ```
-  Exposes the API/dashboard on `MONITOR_PORT` (default 5000) and persists data in the `server_data` volume.
-
-- **Client only:**
-  ```sh
-  export SERVER_URL="http://your-server-host:5000/metrics"
-  docker-compose -f docker-compose.client.yml up --build
-  ```
-  Sends metrics to the URL provided in `SERVER_URL`. Adjust `SCRAPE_INTERVAL` or `CPU_SAMPLE_INTERVAL` as needed via environment variables.
-
-Stop services when finished with `docker-compose down` (matching the compose file you used). Remove volumes with `docker-compose down -v` to reset stored metrics.
-
-### Scaling Clients (full stack)
-Simulate multiple monitored nodes by scaling the `client` service:
+## Deploying the Monitoring Server
+Run the Flask dashboard via Docker Compose:
 ```sh
-docker-compose up --build --scale client=3
+docker-compose up --build -d
 ```
-Each container reports metrics under its unique hostname.
+Override the exposed port with `MONITOR_PORT` if required, then browse to `http://localhost:5000/dashboard` (or the port you set). Stop the stack with `docker-compose down` and remove persisted metrics using `docker-compose down -v`.
 
-## Local Development
-- See `client/README.md` for running the agent directly.
-- See `server/README.md` for running the Flask server locally.
+## System Stats Service (Client)
+The client service is now a standalone FastAPI application intended to run directly on the host so it can observe real system metrics. Installation, API details, and background service templates are documented in `client/README.md`.
+
+An optional `docker-compose.client.yml` is available for development, but metrics collected inside a container reflect container namespaces rather than the host.
 
 ## Documentation
 - `ARCHITECTURE.md` – component responsibilities, data flow, and deployment overview.

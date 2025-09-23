@@ -1,12 +1,14 @@
-# Client-only deployment. Set SERVER_URL to point at the remote server instance.
+# Containerized run of the system stats service (container metrics only).
 version: "3.9"
 
 services:
-  client:
+  system-stats:
     build:
       context: ./client
     restart: unless-stopped
     environment:
-      SERVER_URL: ${SERVER_URL:-http://server-host:5000/metrics}
-      SCRAPE_INTERVAL: ${SCRAPE_INTERVAL:-30}
-      CPU_SAMPLE_INTERVAL: ${CPU_SAMPLE_INTERVAL:-1.0}
+      SYSTEM_STATS_HOST: 0.0.0.0
+      SYSTEM_STATS_PORT: ${SYSTEM_STATS_PORT:-5001}
+      SYSTEM_STATS_LOG_LEVEL: ${SYSTEM_STATS_LOG_LEVEL:-info}
+    ports:
+      - "${SYSTEM_STATS_PORT:-5001}:5001"

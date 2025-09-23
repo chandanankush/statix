@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.local.systemstats</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/local/bin/system-stats-service</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>SYSTEM_STATS_HOST</key>
+      <string>127.0.0.1</string>
+      <key>SYSTEM_STATS_PORT</key>
+      <string>5001</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${HOME}/Library/Logs/system-stats-service.log</string>
+    <key>StandardErrorPath</key>
+    <string>${HOME}/Library/Logs/system-stats-service.log</string>
+    <key>WorkingDirectory</key>
+    <string>${HOME}</string>
+  </dict>
+</plist>
