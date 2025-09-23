@@ -37,7 +37,9 @@ def ensure_database() -> None:
                 hostname TEXT NOT NULL,
                 cpu REAL NOT NULL,
                 ram REAL NOT NULL,
-                disk REAL NOT NULL
+                disk REAL NOT NULL,
+                disk_read REAL DEFAULT 0,
+                disk_write REAL DEFAULT 0
             )
             """
         )
@@ -53,7 +55,16 @@ def ensure_database() -> None:
             )
             """
         )
+        _ensure_column(conn, "metrics", "disk_read", "REAL DEFAULT 0")
+        _ensure_column(conn, "metrics", "disk_write", "REAL DEFAULT 0")
         conn.commit()
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    cursor = conn.execute(f"PRAGMA table_info({table})")
+    existing = {row[1] for row in cursor.fetchall()}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def open_connection() -> sqlite3.Connection:
@@ -65,13 +76,18 @@ def open_connection() -> sqlite3.Connection:
 def insert_metric(payload: Dict[str, float]) -> None:
     with closing(open_connection()) as conn:
         conn.execute(
-            "INSERT INTO metrics(timestamp, hostname, cpu, ram, disk) VALUES (?, ?, ?, ?, ?)",
+            """
+            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 payload["timestamp"],
                 payload["hostname"],
                 payload["cpu"],
                 payload["ram"],
                 payload["disk"],
+                payload.get("disk_read", 0.0),
+                payload.get("disk_write", 0.0),
             ),
         )
         conn.commit()
@@ -151,7 +167,7 @@ def delete_host(hostname: str) -> Dict[str, int]:
 
 
 def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable[sqlite3.Row]:
-    sql = "SELECT timestamp, hostname, cpu, ram, disk FROM metrics"
+    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write FROM metrics"
     params = []
     conditions = []
 
@@ -224,6 +240,8 @@ def receive_metrics():
             "ram": float(payload["ram"]),
             "disk": float(payload["disk"]),
             "timestamp": timestamp,
+            "disk_read": float(payload.get("disk_read", 0.0)),
+            "disk_write": float(payload.get("disk_write", 0.0)),
         }
     except (TypeError, ValueError) as exc:
         logging.warning("Invalid metric payload: %s", exc)
@@ -254,6 +272,8 @@ def data_endpoint():
             "cpu": row["cpu"],
             "ram": row["ram"],
             "disk": row["disk"],
+            "disk_read": row["disk_read"],
+            "disk_write": row["disk_write"],
         }
         for row in rows
     ]

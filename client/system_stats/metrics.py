@@ -105,6 +105,7 @@ def collect_system_metrics() -> Dict[str, Any]:
     root_path = _resolve_root_path()
     disk_usage = _as_dict(psutil.disk_usage(str(root_path)))
     disk_usage["mount"] = str(root_path)
+    disk_io = _as_dict(psutil.disk_io_counters())
 
     net_io = _as_dict(psutil.net_io_counters())
     primary_interface = _primary_network_interface()
@@ -130,6 +131,7 @@ def collect_system_metrics() -> Dict[str, Any]:
         "memory": memory,
         "swap": swap,
         "disk": disk_usage,
+        "disk_io": disk_io,
         "network": {
             "io_counters": net_io,
             "primary_interface": primary_interface,

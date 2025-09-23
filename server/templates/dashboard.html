@@ -436,6 +436,8 @@
                         <div class="stat-row"><span class="stat-label">Total Capacity</span><span class="stat-value" id="diskTotal">—</span></div>
                         <div class="stat-row"><span class="stat-label">Free Space</span><span class="stat-value" id="diskFree">—</span></div>
                         <div class="stat-row"><span class="stat-label">Mount</span><span class="stat-value" id="diskMount">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Read</span><span class="stat-value" id="diskReadThroughput">—</span></div>
+                        <div class="stat-row"><span class="stat-label">Write</span><span class="stat-value" id="diskWriteThroughput">—</span></div>
                     </div>
                     <div class="progress"><div class="progress-bar disk" id="diskUsageBar"></div></div>
                 </div>
@@ -548,6 +550,8 @@
             diskTotal: document.getElementById('diskTotal'),
             diskFree: document.getElementById('diskFree'),
             diskMount: document.getElementById('diskMount'),
+            diskReadThroughput: document.getElementById('diskReadThroughput'),
+            diskWriteThroughput: document.getElementById('diskWriteThroughput'),
             systemHostname: document.getElementById('systemHostname'),
             systemOS: document.getElementById('systemOS'),
             systemArchitecture: document.getElementById('systemArchitecture'),
@@ -607,7 +611,48 @@
 
         const cpuChart = new Chart(document.getElementById('cpuChart'), chartConfig('CPU %', '#ff6384', 'rgba(255, 99, 132, 0.2)'));
         const ramChart = new Chart(document.getElementById('ramChart'), chartConfig('RAM %', '#36a2eb', 'rgba(54, 162, 235, 0.2)'));
-        const diskChart = new Chart(document.getElementById('diskChart'), chartConfig('Disk %', '#ffcd56', 'rgba(255, 205, 86, 0.2)'));
+        const diskChart = new Chart(document.getElementById('diskChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Disk Read (MB/s)',
+                        data: [],
+                        fill: false,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        tension: 0.25,
+                    },
+                    {
+                        label: 'Disk Write (MB/s)',
+                        data: [],
+                        fill: false,
+                        borderColor: '#f97316',
+                        backgroundColor: 'rgba(249, 115, 22, 0.2)',
+                        tension: 0.25,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: {
+                            autoSkip: true,
+                            maxTicksLimit: 10,
+                        },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (value) => `${value} MB/s`,
+                        },
+                    },
+                },
+            },
+        });
 
         function buildQueryParams() {
             const params = new URLSearchParams();
@@ -634,6 +679,22 @@
             chart.data.labels = metrics.map(point => formatTimestamp(point.timestamp));
             chart.data.datasets[0].data = metrics.map(point => point[field]);
             chart.update('none');
+        }
+
+        function toNonNegativeNumber(value) {
+            const numeric = Number(value);
+            if (Number.isNaN(numeric)) {
+                return 0;
+            }
+            return Math.max(0, numeric);
+        }
+
+        function updateDiskChart(metrics) {
+            const labels = metrics.map(point => formatTimestamp(point.timestamp));
+            diskChart.data.labels = labels;
+            diskChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.disk_read));
+            diskChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.disk_write));
+            diskChart.update('none');
         }
 
         function setDetailField(key, value) {
@@ -698,6 +759,21 @@
                 return `${(value / 1000).toFixed(1)} Gbps`;
             }
             return `${value.toFixed(0)} Mbps`;
+        }
+
+        function formatBytesPerSecond(value) {
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+                return '—';
+            }
+            const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+            let size = value;
+            let unit = 0;
+            while (size >= 1024 && unit < units.length - 1) {
+                size /= 1024;
+                unit += 1;
+            }
+            const precision = size < 10 ? 1 : 0;
+            return `${size.toFixed(precision)} ${units[unit]}`;
         }
 
         function formatDateTime(value) {
@@ -770,6 +846,11 @@
             setDetailField('diskFree', formatBytes(disk.free));
             setDetailField('diskMount', disk.mount || '—');
             setProgressBar('diskUsageBar', diskPercent ?? 0);
+            const throughput = details.throughput || {};
+            const readBps = throughput.disk_read_bytes_per_sec;
+            const writeBps = throughput.disk_write_bytes_per_sec;
+            setDetailField('diskReadThroughput', formatBytesPerSecond(readBps));
+            setDetailField('diskWriteThroughput', formatBytesPerSecond(writeBps));
 
             const system = details.system || {};
             setDetailField('systemHostname', system.hostname || '—');
@@ -999,7 +1080,7 @@
                 const metrics = payload.data || [];
                 updateChartData(cpuChart, metrics, 'cpu');
                 updateChartData(ramChart, metrics, 'ram');
-                updateChartData(diskChart, metrics, 'disk');
+                updateDiskChart(metrics);
                 updateStatus(metrics);
                 const selectedHostname = hostnameFilter.value;
                 if (selectedHostname) {

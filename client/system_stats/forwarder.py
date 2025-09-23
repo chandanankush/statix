@@ -25,7 +25,7 @@ def fetch_system_stats(url: str) -> Dict[str, Any]:
     return response.json()
 
 
-def transform_payload(stats: Dict[str, Any]) -> Dict[str, Any]:
+def transform_payload(stats: Dict[str, Any], throughput: Dict[str, float]) -> Dict[str, Any]:
     memory = stats.get("memory", {})
     disk = stats.get("disk", {})
     cpu = stats.get("cpu", {})
@@ -36,6 +36,8 @@ def transform_payload(stats: Dict[str, Any]) -> Dict[str, Any]:
         "ram": float(memory.get("percent", 0.0)),
         "disk": float(disk.get("percent", 0.0)),
         "timestamp": int(time.time()),
+        "disk_read": throughput.get("read_mb_s", 0.0),
+        "disk_write": throughput.get("write_mb_s", 0.0),
         "details": stats,
     }
 
@@ -61,18 +63,49 @@ def run_forwarder() -> None:
         metrics_url,
     )
 
+    last_disk_io: Dict[str, Any] | None = None
+    last_timestamp: float | None = None
+
     while True:
         start_time = time.time()
         try:
             stats = fetch_system_stats(system_stats_url)
-            payload = transform_payload(stats)
+            disk_io = stats.get("disk_io", {}) or {}
+            now = time.time()
+            read_rate = 0.0
+            write_rate = 0.0
+            if last_disk_io and last_timestamp:
+                elapsed = max(1e-6, now - last_timestamp)
+                read_rate = max(0.0, (disk_io.get("read_bytes", 0) - last_disk_io.get("read_bytes", 0)) / elapsed)
+                write_rate = max(0.0, (disk_io.get("write_bytes", 0) - last_disk_io.get("write_bytes", 0)) / elapsed)
+
+            throughput = {
+                "read_mb_s": read_rate / (1024 * 1024),
+                "write_mb_s": write_rate / (1024 * 1024),
+            }
+
+            stats.setdefault("throughput", {})
+            stats["throughput"].update(
+                {
+                    "disk_read_bytes_per_sec": read_rate,
+                    "disk_write_bytes_per_sec": write_rate,
+                    "disk_read_mb_per_sec": throughput["read_mb_s"],
+                    "disk_write_mb_per_sec": throughput["write_mb_s"],
+                }
+            )
+
+            payload = transform_payload(stats, throughput)
             post_metrics(metrics_url, payload)
             logging.info(
-                "Forwarded metrics cpu=%.1f%% ram=%.1f%% disk=%.1f%%",
+                "Forwarded metrics cpu=%.1f%% ram=%.1f%% disk=%.1f%% read=%.2fMB/s write=%.2fMB/s",
                 payload["cpu"],
                 payload["ram"],
                 payload["disk"],
+                throughput["read_mb_s"],
+                throughput["write_mb_s"],
             )
+            last_disk_io = disk_io
+            last_timestamp = now
         except Exception as exc:  # pylint: disable=broad-except
             logging.warning("Forwarding failed: %s", exc)
         elapsed = time.time() - start_time
