@@ -4,7 +4,7 @@ A lightweight monitoring server with an optional system stats microservice. The 
 
 ## Repository Layout
 ```
-client/                   # System stats FastAPI service (installable package + service templates)
+client/                   # System stats FastAPI service, forwarder utility, service templates
 server/                   # Flask API, dashboard, and container definition
 docker-compose.yml        # Monitoring server deployment
 docker-compose.server.yml # Alias compose file for the server
@@ -26,9 +26,21 @@ docker-compose up --build -d
 Override the exposed port with `MONITOR_PORT` if required, then browse to `http://localhost:5000/dashboard` (or the port you set). Stop the stack with `docker-compose down` and remove persisted metrics using `docker-compose down -v`.
 
 ## System Stats Service (Client)
-The client service is now a standalone FastAPI application intended to run directly on the host so it can observe real system metrics. Installation, API details, and background service templates are documented in `client/README.md`.
+Install and launch the FastAPI service on the host to expose real system metrics:
+```sh
+pip install ./client
+SYSTEM_STATS_PORT=5001 system-stats-service
+```
 
-An optional `docker-compose.client.yml` is available for development, but metrics collected inside a container reflect container namespaces rather than the host.
+Use the companion forwarder to push readings into the monitoring server:
+```sh
+SYSTEM_STATS_URL=http://127.0.0.1:5001/system \
+MONITORING_SERVER_METRICS_URL=http://127.0.0.1:5050/metrics \
+SYSTEM_STATS_FORWARD_INTERVAL=30 \
+system-stats-forwarder
+```
+
+See `client/README.md` for environment variables and background service templates (systemd/launchd) for both the API and forwarder.
 
 ## Documentation
 - `ARCHITECTURE.md` – component responsibilities, data flow, and deployment overview.

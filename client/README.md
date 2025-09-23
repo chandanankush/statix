@@ -9,7 +9,7 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install .
 ```
-This installs the `system-stats-service` console entry point.
+This installs the `system-stats-service` API and the `system-stats-forwarder` bridge utility.
 
 ## Usage
 Run the service:
@@ -27,6 +27,20 @@ system-stats-service
 ### API
 - `GET /system` – Returns JSON payload with CPU, memory, swap, disk usage, network counters, uptime, and boot time.
 - `GET /health` – Lightweight readiness check.
+
+## Forwarding Metrics to the Monitoring Server
+Run the forwarder alongside the service to push readings to the Flask monitoring server:
+```sh
+export SYSTEM_STATS_URL=http://127.0.0.1:5001/system
+export MONITORING_SERVER_METRICS_URL=http://127.0.0.1:5050/metrics
+export SYSTEM_STATS_FORWARD_INTERVAL=30
+system-stats-forwarder
+```
+Environment variables:
+- `SYSTEM_STATS_URL` – Source FastAPI endpoint (default `http://127.0.0.1:5001/system`).
+- `MONITORING_SERVER_METRICS_URL` – Destination monitoring server endpoint (default `http://127.0.0.1:5050/metrics`).
+- `SYSTEM_STATS_FORWARD_INTERVAL` – Seconds between polls (default `30`).
+- `SYSTEM_STATS_FORWARD_LOG_LEVEL` – Logging level (`INFO` by default).
 
 ## Running as a Background Service
 Templates are provided under `service/` for both systemd (Linux/Raspberry Pi) and launchd (macOS).

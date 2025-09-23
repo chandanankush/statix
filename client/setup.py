@@ -19,10 +19,12 @@ setup(
         "fastapi>=0.115.0",
         "uvicorn[standard]>=0.32.0",
         "psutil>=5.9.0",
+        "requests>=2.32.0",
     ],
     entry_points={
         "console_scripts": [
             "system-stats-service=system_stats.main:main",
+            "system-stats-forwarder=system_stats.forwarder:main",
         ]
     },
     classifiers=[
