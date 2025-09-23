@@ -1,0 +1,12 @@
+# Client-only deployment. Set SERVER_URL to point at the remote server instance.
+version: "3.9"
+
+services:
+  client:
+    build:
+      context: ./client
+    restart: unless-stopped
+    environment:
+      SERVER_URL: ${SERVER_URL:-http://server-host:5000/metrics}
+      SCRAPE_INTERVAL: ${SCRAPE_INTERVAL:-30}
+      CPU_SAMPLE_INTERVAL: ${CPU_SAMPLE_INTERVAL:-1.0}

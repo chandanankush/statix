@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Metrics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0 20px 40px;
+            background-color: #f6f8fa;
+        }
+
+        header {
+            padding: 20px 0 10px;
+            text-align: center;
+        }
+
+        .filters {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            max-width: 900px;
+            margin: 0 auto 20px;
+            background: #ffffff;
+            padding: 16px 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .status-label {
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .status-hostlist {
+            list-style: none;
+            padding: 0;
+            margin: 12px 0 0;
+            display: grid;
+            gap: 4px;
+        }
+
+        .chart-container {
+            max-width: 900px;
+            margin: 0 auto 30px;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        select {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        canvas {
+            max-height: 320px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>System Metrics Dashboard</h1>
+        <p>Live CPU, RAM, and Disk utilization reported by monitoring clients.</p>
+    </header>
+
+    <section class="filters">
+        <div>
+            <label for="hostnameFilter">Hostname</label>
+            <select id="hostnameFilter">
+                <option value="">All Hosts</option>
+                {% for host in hostnames %}
+                <option value="{{ host }}">{{ host }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="timeframeFilter">Timeframe</label>
+            <select id="timeframeFilter">
+                <option value="">All Data</option>
+                {% for key, seconds in timeframe_presets.items() %}
+                <option value="{{ key }}" {% if key == default_timeframe %}selected{% endif %}>
+                    Last {{ key }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </section>
+
+    <section class="status">
+        <div>
+            <span class="status-label">Last data received:</span>
+            <span id="lastUpdatedText">No data yet</span>
+        </div>
+        <ul id="hostUpdateList" class="status-hostlist">
+            <li>No metrics available</li>
+        </ul>
+    </section>
+
+    <div class="chart-container">
+        <h2>CPU Usage (%)</h2>
+        <canvas id="cpuChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h2>RAM Usage (%)</h2>
+        <canvas id="ramChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h2>Disk Usage (%)</h2>
+        <canvas id="diskChart"></canvas>
+    </div>
+
+    <script>
+        const timeframePresets = {{ timeframe_presets | tojson }};
+        const defaultTimeframe = "{{ default_timeframe }}";
+
+        const hostnameFilter = document.getElementById('hostnameFilter');
+        const timeframeFilter = document.getElementById('timeframeFilter');
+        const lastUpdatedText = document.getElementById('lastUpdatedText');
+        const hostUpdateList = document.getElementById('hostUpdateList');
+
+        const chartConfig = (label, borderColor, backgroundColor) => ({
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label,
+                    data: [],
+                    fill: false,
+                    borderColor,
+                    backgroundColor,
+                    tension: 0.25,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: {
+                            autoSkip: true,
+                            maxTicksLimit: 10,
+                        }
+                    },
+                    y: {
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            stepSize: 10
+                        }
+                    }
+                }
+            }
+        });
+
+        const cpuChart = new Chart(document.getElementById('cpuChart'), chartConfig('CPU %', '#ff6384', 'rgba(255, 99, 132, 0.2)'));
+        const ramChart = new Chart(document.getElementById('ramChart'), chartConfig('RAM %', '#36a2eb', 'rgba(54, 162, 235, 0.2)'));
+        const diskChart = new Chart(document.getElementById('diskChart'), chartConfig('Disk %', '#ffcd56', 'rgba(255, 205, 86, 0.2)'));
+
+        function buildQueryParams() {
+            const params = new URLSearchParams();
+            const hostname = hostnameFilter.value;
+            const timeframe = timeframeFilter.value;
+            if (hostname) {
+                params.append('hostname', hostname);
+            }
+            if (timeframe) {
+                params.append('timeframe', timeframe);
+            }
+            return params.toString();
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) {
+                return 'No data yet';
+            }
+            const date = new Date(ts * 1000);
+            return date.toLocaleString();
+        }
+
+        function updateChartData(chart, metrics, field) {
+            chart.data.labels = metrics.map(point => formatTimestamp(point.timestamp));
+            chart.data.datasets[0].data = metrics.map(point => point[field]);
+            chart.update('none');
+        }
+
+        function updateStatus(metrics) {
+            if (metrics.length === 0) {
+                lastUpdatedText.textContent = 'No data yet';
+                hostUpdateList.innerHTML = '<li>No metrics available</li>';
+                return;
+            }
+
+            const latestTimestamp = metrics.reduce((max, point) => Math.max(max, point.timestamp), 0);
+            lastUpdatedText.textContent = formatTimestamp(latestTimestamp);
+
+            const latestPerHost = new Map();
+            metrics.forEach(point => {
+                const existing = latestPerHost.get(point.hostname);
+                if (!existing || point.timestamp > existing.timestamp) {
+                    latestPerHost.set(point.hostname, point);
+                }
+            });
+
+            const items = Array.from(latestPerHost.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
+            hostUpdateList.innerHTML = '';
+            items.forEach(point => {
+                const li = document.createElement('li');
+                li.textContent = `${point.hostname}: ${formatTimestamp(point.timestamp)}`;
+                hostUpdateList.appendChild(li);
+            });
+        }
+
+        async function fetchMetrics() {
+            try {
+                const query = buildQueryParams();
+                const response = await fetch(`/data${query ? '?' + query : ''}`);
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                const payload = await response.json();
+                const metrics = payload.data || [];
+                updateChartData(cpuChart, metrics, 'cpu');
+                updateChartData(ramChart, metrics, 'ram');
+                updateChartData(diskChart, metrics, 'disk');
+                updateStatus(metrics);
+            } catch (error) {
+                console.error('Failed to update charts', error);
+            }
+        }
+
+        hostnameFilter.addEventListener('change', fetchMetrics);
+        timeframeFilter.addEventListener('change', fetchMetrics);
+
+        if (timeframeFilter.value === '' && timeframePresets[defaultTimeframe]) {
+            timeframeFilter.value = defaultTimeframe;
+        }
+
+        fetchMetrics();
+        setInterval(fetchMetrics, 1000);
+    </script>
+</body>
+</html>
