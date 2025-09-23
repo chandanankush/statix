@@ -54,6 +54,57 @@ system-stats-forwarder
 ```
 The forwarder logs utilisation percentages and retries on transient failures.
 
+### Keeping the Forwarder Running
+
+#### Quick one-off (nohup)
+```sh
+nohup system-stats-forwarder \
+  > ~/Library/Logs/system-stats-forwarder.log 2>&1 &
+```
+Set the required environment variables before running (as shown above). Stop with `pkill -f system-stats-forwarder`.
+
+#### macOS (launchd)
+1. Create a LaunchAgents plist, e.g. `~/Library/LaunchAgents/com.local.systemstats.forwarder.plist`:
+   ```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+   <plist version="1.0">
+     <dict>
+       <key>Label</key>
+       <string>com.local.systemstats.forwarder</string>
+       <key>ProgramArguments</key>
+       <array>
+         <string>/Users/USERNAME/Library/Python/3.9/bin/system-stats-forwarder</string>
+       </array>
+       <key>EnvironmentVariables</key>
+       <dict>
+         <key>MONITORING_SERVER_METRICS_URL</key>
+         <string>http://192.168.0.139:5050/metrics</string>
+         <key>SYSTEM_STATS_URL</key>
+         <string>http://127.0.0.1:5001/system</string>
+         <key>SYSTEM_STATS_FORWARD_INTERVAL</key>
+         <string>30</string>
+         <key>SYSTEM_STATS_FORWARD_LOG_LEVEL</key>
+         <string>info</string>
+       </dict>
+       <key>RunAtLoad</key>
+       <true/>
+       <key>KeepAlive</key>
+       <true/>
+       <key>StandardOutPath</key>
+       <string>/Users/USERNAME/Library/Logs/system-stats-forwarder.log</string>
+       <key>StandardErrorPath</key>
+       <string>/Users/USERNAME/Library/Logs/system-stats-forwarder.log</string>
+     </dict>
+   </plist>
+   ```
+2. Load and start:
+   ```sh
+   launchctl load ~/Library/LaunchAgents/com.local.systemstats.forwarder.plist
+   launchctl start com.local.systemstats.forwarder
+   ```
+3. Manage with `launchctl list | grep systemstats`, `launchctl unload …`, and review logs in `~/Library/Logs/`.
+
 ## REST API
 - `GET /system` – Returns the full snapshot (`cpu`, `memory`, `disk`, `network`, `system`, `uptime`, timestamps). Example:
 ```json
