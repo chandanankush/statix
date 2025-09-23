@@ -1,30 +1,83 @@
 # Monitoring Server
 
-Flask application that stores metrics from monitoring clients and exposes REST APIs plus a Chart.js dashboard.
+Flask application that ingests metrics from the system stats forwarder, persists them in SQLite, and exposes both APIs and a Chart.js dashboard.
+
+## Architecture Summary
+- `server.py` uses Flask to define REST endpoints, handle persistence, and render the dashboard template.
+- Metrics are stored in two tables:
+  - `metrics` – time-series of `hostname`, `cpu`, `ram`, `disk`, `timestamp`.
+  - `host_details` – latest rich snapshot (`details_json`) per host for dashboard summary cards.
+- Templates live under `server/templates/`; `dashboard.html` uses Chart.js and vanilla JS to plot trends and render detail cards.
+
+## Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/metrics` | Accepts JSON payload `{hostname, cpu, ram, disk, timestamp, details?}`. Persists metrics and optional `details` snapshot. |
+| `GET` | `/data` | Returns `{count, data}` filtered by `hostname` and/or `timeframe` (`1h`, `24h`, `7d`). |
+| `GET` | `/details` | Returns latest snapshot for a given `hostname`. |
+| `GET` | `/dashboard` | Renders the dashboard UI. |
+| `GET` | `/health` | Health check. |
 
 ## Configuration
 Environment variables:
-- `DATABASE_PATH` (default `server/data/metrics.db`): SQLite location for persisted metrics.
+- `DATABASE_PATH` (default `server/data/metrics.db`) – SQLite database location. Ensure parent directory exists or use Docker volume/bind mount.
 
-## Run Locally
+## Running Locally (without Docker)
 ```sh
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install flask gunicorn
 export DATABASE_PATH=./data/metrics.db
 python server.py
 ```
-Visit the dashboard at http://127.0.0.1:5000/dashboard.
+Dashboard: `http://127.0.0.1:5050/dashboard`
 
-## Docker Image
-The Dockerfile installs Flask and Gunicorn and copies the application code plus templates.
-Build and run manually:
+## Docker Usage
+Dockerfile (located in `server/`) installs dependencies and runs `gunicorn`.
+### Build & Run
 ```sh
-docker build -t monitoring-server .
-docker run --rm --name monitoring-server -p 5000:5000 \
-  -e DATABASE_PATH=/app/data/metrics.db \
-  -v $(pwd)/data:/app/data \
+docker build -t monitoring-server server
+
+docker run --rm \ 
+  --name monitoring-server \ 
+  -p 5050:5000 \ 
+  -e DATABASE_PATH=/app/data/metrics.db \ 
+  -v $(pwd)/server/data:/app/data \ 
   monitoring-server
 ```
+### Compose
+`docker-compose.yml` handles build/run and persists data using the `server_data` named volume. Launch with `docker-compose up --build -d`.
 
-Within `docker-compose`, a named volume (`server_data`) persists the SQLite database.
+## Data Schema
+```sql
+CREATE TABLE metrics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp INTEGER NOT NULL,
+  hostname TEXT NOT NULL,
+  cpu REAL NOT NULL,
+  ram REAL NOT NULL,
+  disk REAL NOT NULL
+);
+CREATE INDEX idx_metrics_host_time ON metrics(hostname, timestamp);
+
+CREATE TABLE host_details (
+  hostname TEXT PRIMARY KEY,
+  details_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+```
+
+## Dashboard Behaviour
+- Polls `/data` every second using the selected `hostname` and `timeframe` filters.
+- Updates trend charts for CPU/RAM/Disk usage.
+- When a specific host is selected, fetches `/details?hostname=...` to populate summary cards (CPU info, memory usage, storage, system info, network info, uptime).
+
+## Development Notes
+- Designed for Python 3.11 in Docker; running locally requires matching dependencies.
+- Logging uses `logging.basicConfig` at INFO level. Adjust as needed.
+- Extendable: add new tables/endpoints to support additional metrics or alternate persistence layers (PostgreSQL, TimescaleDB, etc.).
+
+## Troubleshooting
+- **No data on dashboard** – Ensure forwarder is pushing metrics to `/metrics`; check server logs (`docker-compose logs` or stdout).
+- **SQLite locked errors** – Typically transient; consider moving to a server-grade DB if multiple writers are expected.
+- **Large datasets** – Add pagination/aggregation or migrate to a database optimised for time series.

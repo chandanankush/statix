@@ -1,0 +1,40 @@
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Package metadata
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+.env/
+.envrc
+
+# Logs and runtime files
+*.log
+*.sqlite3
+*.db
+
+# OS / IDE noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local tooling
+pip-wheel-metadata/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+
+# Docker artifacts
+*.pid
+
+# Generated data
+server/data/

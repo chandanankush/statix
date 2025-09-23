@@ -10,17 +10,17 @@ These components can run on the same machine for local monitoring or be distribu
 
 ## Components
 - **System Stats Service (`client/system_stats/`)** – Installable Python package that relies on `psutil` to collect live host metrics and serves them from `/system`. Includes packaging metadata plus systemd and launchd templates for long-running deployments.
-- **Forwarder (`system-stats-forwarder`)** – Console script that periodically polls the FastAPI endpoint and forwards condensed metrics (`hostname`, `cpu`, `ram`, `disk`, `timestamp`) to the monitoring server. Environment-variable driven for easy cron/service usage.
-- **Monitoring Server (`server/`)** – Flask API backed by SQLite. Provides `/metrics` for ingestion, `/data` for retrieval, `/dashboard` for visualization, and `/health` for readiness checks. Dockerised for simple hosting.
-- **Dashboard** – Chart.js-powered page rendered from `server/templates/dashboard.html` that polls `/data` and visualises trends across hosts and timeframes.
+- **Forwarder (`system-stats-forwarder`)** – Console script that periodically polls the FastAPI endpoint and forwards condensed metrics (`hostname`, `cpu`, `ram`, `disk`, `timestamp`) alongside the rich snapshot to the monitoring server.
+- **Monitoring Server (`server/`)** – Flask API backed by SQLite. Provides `/metrics` for ingestion, `/details` for host snapshots, `/data` for retrieval, `/dashboard` for visualization, and `/health` for readiness checks. Dockerised for simple hosting.
+- **Dashboard** – Chart.js-powered page rendered from `server/templates/dashboard.html` that polls `/data` and visualises trends across hosts and timeframes while showing live host fact cards.
 - **Storage** – SQLite database persisted at `server/data/metrics.db` (or the path in `DATABASE_PATH`). Docker Compose mounts a named volume so history survives container restarts.
-- **Docker Compose (`docker-compose.yml`)** – Runs the monitoring server container. Additional compose file `docker-compose.client.yml` builds the FastAPI service for development, though native installation is recommended for real host metrics.
+- **Docker Compose (`docker-compose.yml`)** – Runs the monitoring server container. The client service is now intended to run natively and no longer ships a Docker image.
 
 ## Data Flow
 1. System Stats Service gathers metrics locally with `psutil` and serves them via `GET /system`.
 2. The forwarder (or any external scheduler) fetches `/system`, extracts the required fields, appends the host identifier and timestamp, and POSTs the payload to `/metrics` on the monitoring server.
-3. The monitoring server validates and stores incoming metrics in SQLite.
-4. The dashboard issues `/data?hostname=...&timeframe=...` to visualise historical readings.
+3. The monitoring server validates, stores incoming metrics in SQLite, and records the rich snapshot for the `/details` endpoint.
+4. The dashboard issues `/data?hostname=...&timeframe=...` to visualise historical readings and `/details?hostname=...` to populate the summary cards.
 
 ## Deployment Considerations
 - **System Stats Service** – Install directly on each monitored machine; configure via environment variables or the provided service templates. Logging goes to stdout/stderr for integration with systemd/launchd logs.

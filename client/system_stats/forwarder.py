@@ -26,12 +26,17 @@ def fetch_system_stats(url: str) -> Dict[str, Any]:
 
 
 def transform_payload(stats: Dict[str, Any]) -> Dict[str, Any]:
+    memory = stats.get("memory", {})
+    disk = stats.get("disk", {})
+    cpu = stats.get("cpu", {})
+
     return {
         "hostname": socket.gethostname(),
-        "cpu": float(stats["cpu"]["percent"]),
-        "ram": float(stats["memory"]["percent"]),
-        "disk": float(stats["disk"]["percent"]),
+        "cpu": float(cpu.get("percent", 0.0)),
+        "ram": float(memory.get("percent", 0.0)),
+        "disk": float(disk.get("percent", 0.0)),
         "timestamp": int(time.time()),
+        "details": stats,
     }
 
 
@@ -45,9 +50,16 @@ def run_forwarder() -> None:
     metrics_url = get_env("MONITORING_SERVER_METRICS_URL", DEFAULT_MONITORING_METRICS_URL)
     interval = float(get_env("SYSTEM_STATS_FORWARD_INTERVAL", str(DEFAULT_INTERVAL_SECONDS)))
 
-    logging.basicConfig(level=os.getenv("SYSTEM_STATS_FORWARD_LOG_LEVEL", "INFO").upper(),
-                        format="%(asctime)s %(levelname)s %(message)s")
-    logging.info("Forwarder started: polling %s every %ss -> %s", system_stats_url, interval, metrics_url)
+    logging.basicConfig(
+        level=os.getenv("SYSTEM_STATS_FORWARD_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    logging.info(
+        "Forwarder started: polling %s every %.1fs -> %s",
+        system_stats_url,
+        interval,
+        metrics_url,
+    )
 
     while True:
         start_time = time.time()
@@ -55,8 +67,12 @@ def run_forwarder() -> None:
             stats = fetch_system_stats(system_stats_url)
             payload = transform_payload(stats)
             post_metrics(metrics_url, payload)
-            logging.info("Forwarded metrics cpu=%.1f ram=%.1f disk=%.1f", payload["cpu"], payload["ram"], payload["disk"])
-            logging.debug("Payload: %s", payload)
+            logging.info(
+                "Forwarded metrics cpu=%.1f%% ram=%.1f%% disk=%.1f%%",
+                payload["cpu"],
+                payload["ram"],
+                payload["disk"],
+            )
         except Exception as exc:  # pylint: disable=broad-except
             logging.warning("Forwarding failed: %s", exc)
         elapsed = time.time() - start_time

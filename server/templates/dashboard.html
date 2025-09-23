@@ -71,6 +71,61 @@
         canvas {
             max-height: 320px;
         }
+
+        .details {
+            max-width: 1200px;
+            margin: 0 auto 20px;
+        }
+
+        .details.hidden {
+            display: none;
+        }
+
+        .cards-grid {
+            display: grid;
+            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 18px 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            color: #1a2a4a;
+        }
+
+        .card-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 6px;
+        }
+
+        .card-list li {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.95rem;
+            color: #1f2933;
+        }
+
+        .card-label {
+            font-weight: 600;
+            color: #516173;
+        }
+
+        .card-value {
+            text-align: right;
+        }
     </style>
 </head>
 <body>
@@ -99,6 +154,69 @@
                 </option>
                 {% endfor %}
             </select>
+        </div>
+    </section>
+
+    <section id="hostDetailsSection" class="details hidden">
+        <div class="cards-grid">
+            <div class="card">
+                <h3>CPU Information</h3>
+                <ul class="card-list">
+                    <li><span class="card-label">Processor</span><span class="card-value" id="cpuProcessor">—</span></li>
+                    <li><span class="card-label">Cores</span><span class="card-value" id="cpuCores">—</span></li>
+                    <li><span class="card-label">Frequency</span><span class="card-value" id="cpuFrequency">—</span></li>
+                    <li><span class="card-label">Usage</span><span class="card-value" id="cpuUsage">—</span></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Memory Usage</h3>
+                <ul class="card-list">
+                    <li><span class="card-label">RAM Usage</span><span class="card-value" id="memoryUsage">—</span></li>
+                    <li><span class="card-label">Total RAM</span><span class="card-value" id="memoryTotal">—</span></li>
+                    <li><span class="card-label">Available</span><span class="card-value" id="memoryAvailable">—</span></li>
+                    <li><span class="card-label">Swap</span><span class="card-value" id="memorySwap">—</span></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Storage Usage</h3>
+                <ul class="card-list">
+                    <li><span class="card-label">Disk Usage</span><span class="card-value" id="diskUsage">—</span></li>
+                    <li><span class="card-label">Total</span><span class="card-value" id="diskTotal">—</span></li>
+                    <li><span class="card-label">Free Space</span><span class="card-value" id="diskFree">—</span></li>
+                    <li><span class="card-label">Mount</span><span class="card-value" id="diskMount">—</span></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>System Information</h3>
+                <ul class="card-list">
+                    <li><span class="card-label">Hostname</span><span class="card-value" id="systemHostname">—</span></li>
+                    <li><span class="card-label">Operating System</span><span class="card-value" id="systemOS">—</span></li>
+                    <li><span class="card-label">Architecture</span><span class="card-value" id="systemArchitecture">—</span></li>
+                    <li><span class="card-label">Platform</span><span class="card-value" id="systemPlatform">—</span></li>
+                    <li><span class="card-label">Model</span><span class="card-value" id="systemModel">—</span></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Network Information</h3>
+                <ul class="card-list">
+                    <li><span class="card-label">Interface</span><span class="card-value" id="networkInterface">—</span></li>
+                    <li><span class="card-label">IPv4 Address</span><span class="card-value" id="networkIPv4">—</span></li>
+                    <li><span class="card-label">Speed</span><span class="card-value" id="networkSpeed">—</span></li>
+                    <li><span class="card-label">MTU</span><span class="card-value" id="networkMtu">—</span></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>System Uptime</h3>
+                <ul class="card-list">
+                    <li><span class="card-label">Uptime</span><span class="card-value" id="uptimeHuman">—</span></li>
+                    <li><span class="card-label">Boot Time</span><span class="card-value" id="uptimeBoot">—</span></li>
+                </ul>
+            </div>
         </div>
     </section>
 
@@ -133,6 +251,36 @@
         const timeframeFilter = document.getElementById('timeframeFilter');
         const lastUpdatedText = document.getElementById('lastUpdatedText');
         const hostUpdateList = document.getElementById('hostUpdateList');
+        const detailsSection = document.getElementById('hostDetailsSection');
+
+        const detailElements = {
+            cpuProcessor: document.getElementById('cpuProcessor'),
+            cpuCores: document.getElementById('cpuCores'),
+            cpuFrequency: document.getElementById('cpuFrequency'),
+            cpuUsage: document.getElementById('cpuUsage'),
+            memoryUsage: document.getElementById('memoryUsage'),
+            memoryTotal: document.getElementById('memoryTotal'),
+            memoryAvailable: document.getElementById('memoryAvailable'),
+            memorySwap: document.getElementById('memorySwap'),
+            diskUsage: document.getElementById('diskUsage'),
+            diskTotal: document.getElementById('diskTotal'),
+            diskFree: document.getElementById('diskFree'),
+            diskMount: document.getElementById('diskMount'),
+            systemHostname: document.getElementById('systemHostname'),
+            systemOS: document.getElementById('systemOS'),
+            systemArchitecture: document.getElementById('systemArchitecture'),
+            systemPlatform: document.getElementById('systemPlatform'),
+            systemModel: document.getElementById('systemModel'),
+            networkInterface: document.getElementById('networkInterface'),
+            networkIPv4: document.getElementById('networkIPv4'),
+            networkSpeed: document.getElementById('networkSpeed'),
+            networkMtu: document.getElementById('networkMtu'),
+            uptimeHuman: document.getElementById('uptimeHuman'),
+            uptimeBoot: document.getElementById('uptimeBoot'),
+        };
+
+        let lastDetailsHostname = null;
+        let lastDetailsUpdatedAt = null;
 
         const chartConfig = (label, borderColor, backgroundColor) => ({
             type: 'line',
@@ -199,6 +347,159 @@
             chart.update('none');
         }
 
+        function setDetailField(key, value) {
+            const element = detailElements[key];
+            if (element) {
+                element.textContent = value ?? '—';
+            }
+        }
+
+        function formatPercent(value) {
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+                return '—';
+            }
+            return `${value.toFixed(1)}%`;
+        }
+
+        function formatBytes(value) {
+            if (typeof value !== 'number' || Number.isNaN(value) || value < 0) {
+                return '—';
+            }
+            const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            let size = value;
+            let unit = 0;
+            while (size >= 1024 && unit < units.length - 1) {
+                size /= 1024;
+                unit += 1;
+            }
+            const precision = size < 10 ? 1 : 0;
+            return `${size.toFixed(precision)} ${units[unit]}`;
+        }
+
+        function formatFrequencyMHz(value) {
+            if (typeof value !== 'number' || Number.isNaN(value) || value <= 0) {
+                return '—';
+            }
+            if (value >= 1000) {
+                return `${(value / 1000).toFixed(1)} GHz`;
+            }
+            return `${value.toFixed(0)} MHz`;
+        }
+
+        function formatSpeedMbps(value) {
+            if (typeof value !== 'number' || Number.isNaN(value) || value <= 0) {
+                return '—';
+            }
+            if (value >= 1000) {
+                return `${(value / 1000).toFixed(1)} Gbps`;
+            }
+            return `${value.toFixed(0)} Mbps`;
+        }
+
+        function formatDateTime(value) {
+            if (!value) {
+                return '—';
+            }
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return '—';
+            }
+            return date.toLocaleString();
+        }
+
+        function buildCoreSummary(logical, physical) {
+            const logicalIsNumber = typeof logical === 'number' && !Number.isNaN(logical);
+            const physicalIsNumber = typeof physical === 'number' && !Number.isNaN(physical);
+            if (physicalIsNumber && logicalIsNumber) {
+                return `${physical} physical / ${logical} logical`;
+            }
+            if (logicalIsNumber) {
+                return `${logical} cores`;
+            }
+            if (physicalIsNumber) {
+                return `${physical} physical cores`;
+            }
+            return '—';
+        }
+
+        function renderHostDetails(details) {
+            const cpu = details.cpu || {};
+            setDetailField('cpuProcessor', cpu.processor || '—');
+            setDetailField('cpuCores', buildCoreSummary(cpu.logical_cores, cpu.physical_cores));
+            setDetailField('cpuFrequency', formatFrequencyMHz(cpu.frequency_mhz));
+            setDetailField('cpuUsage', formatPercent(cpu.percent));
+
+            const memory = details.memory || {};
+            setDetailField('memoryUsage', formatPercent(memory.percent));
+            setDetailField('memoryTotal', formatBytes(memory.total));
+            setDetailField('memoryAvailable', formatBytes(memory.available));
+            const swap = details.swap || {};
+            let swapText = 'Disabled';
+            if (typeof swap.total === 'number' && swap.total > 0) {
+                const swapPercent = typeof swap.percent === 'number' ? ` (${swap.percent.toFixed(1)}%)` : '';
+                swapText = `${formatBytes(swap.total)}${swapPercent}`;
+            }
+            setDetailField('memorySwap', swapText);
+
+            const disk = details.disk || {};
+            setDetailField('diskUsage', formatPercent(disk.percent));
+            setDetailField('diskTotal', formatBytes(disk.total));
+            setDetailField('diskFree', formatBytes(disk.free));
+            setDetailField('diskMount', disk.mount || '—');
+
+            const system = details.system || {};
+            setDetailField('systemHostname', system.hostname || '—');
+            const osText = system.os && system.os_release ? `${system.os} ${system.os_release}` : system.os || system.os_release || '—';
+            setDetailField('systemOS', osText);
+            setDetailField('systemArchitecture', system.architecture || '—');
+            setDetailField('systemPlatform', system.platform || '—');
+            setDetailField('systemModel', system.model || '—');
+
+            const network = (details.network && details.network.primary_interface) || null;
+            setDetailField('networkInterface', network && network.name ? network.name : '—');
+            setDetailField('networkIPv4', network && network.ipv4 ? network.ipv4 : '—');
+            setDetailField('networkSpeed', network ? formatSpeedMbps(network.speed_mbps) : '—');
+            setDetailField('networkMtu', network && typeof network.mtu === 'number' ? network.mtu : '—');
+
+            const uptime = details.uptime || {};
+            setDetailField('uptimeHuman', uptime.human || '—');
+            setDetailField('uptimeBoot', formatDateTime(uptime.boot_time));
+        }
+
+        function hideDetails() {
+            detailsSection.classList.add('hidden');
+            lastDetailsHostname = null;
+            lastDetailsUpdatedAt = null;
+        }
+
+        async function fetchHostDetails(hostname) {
+            if (!hostname) {
+                hideDetails();
+                return;
+            }
+            try {
+                const response = await fetch(`/details?hostname=${encodeURIComponent(hostname)}`);
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                const payload = await response.json();
+                if (!payload.details) {
+                    throw new Error('Missing details in response');
+                }
+                if (lastDetailsHostname === hostname && lastDetailsUpdatedAt === payload.updated_at) {
+                    detailsSection.classList.remove('hidden');
+                    return;
+                }
+                renderHostDetails(payload.details);
+                lastDetailsHostname = hostname;
+                lastDetailsUpdatedAt = payload.updated_at;
+                detailsSection.classList.remove('hidden');
+            } catch (error) {
+                console.error('Failed to fetch host details', error);
+                hideDetails();
+            }
+        }
+
         function updateStatus(metrics) {
             if (metrics.length === 0) {
                 lastUpdatedText.textContent = 'No data yet';
@@ -239,6 +540,12 @@
                 updateChartData(ramChart, metrics, 'ram');
                 updateChartData(diskChart, metrics, 'disk');
                 updateStatus(metrics);
+                const selectedHostname = hostnameFilter.value;
+                if (selectedHostname) {
+                    fetchHostDetails(selectedHostname);
+                } else {
+                    hideDetails();
+                }
             } catch (error) {
                 console.error('Failed to update charts', error);
             }

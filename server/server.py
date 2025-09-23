@@ -1,11 +1,12 @@
 """Flask-based monitoring server that stores metrics and serves a simple dashboard."""
+import json
 import logging
 import os
 import sqlite3
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional
 
 from flask import Flask, jsonify, render_template, request
 
@@ -43,6 +44,15 @@ def ensure_database() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_metrics_host_time ON metrics(hostname, timestamp)"
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS host_details (
+                hostname TEXT PRIMARY KEY,
+                details_json TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -63,6 +73,23 @@ def insert_metric(payload: Dict[str, float]) -> None:
                 payload["ram"],
                 payload["disk"],
             ),
+        )
+        conn.commit()
+
+
+def upsert_host_details(hostname: str, details: Dict[str, Any]) -> None:
+    serialized = json.dumps(details)
+    now_ts = int(time.time())
+    with closing(open_connection()) as conn:
+        conn.execute(
+            """
+            INSERT INTO host_details (hostname, details_json, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(hostname) DO UPDATE SET
+                details_json = excluded.details_json,
+                updated_at = excluded.updated_at
+            """,
+            (hostname, serialized, now_ts),
         )
         conn.commit()
 
@@ -95,8 +122,31 @@ def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable
 
 def get_known_hostnames() -> Iterable[str]:
     with closing(open_connection()) as conn:
-        rows = conn.execute("SELECT DISTINCT hostname FROM metrics ORDER BY hostname ASC").fetchall()
+        rows = conn.execute(
+            """
+            SELECT hostname FROM (
+                SELECT DISTINCT hostname FROM metrics
+                UNION
+                SELECT hostname FROM host_details
+            ) ORDER BY hostname ASC
+            """
+        ).fetchall()
     return [row[0] for row in rows]
+
+
+def get_host_details(hostname: str) -> Optional[Dict[str, Any]]:
+    with closing(open_connection()) as conn:
+        row = conn.execute(
+            "SELECT details_json, updated_at FROM host_details WHERE hostname = ?",
+            (hostname,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "hostname": hostname,
+        "details": json.loads(row["details_json"]),
+        "updated_at": row["updated_at"],
+    }
 
 
 @app.route("/metrics", methods=["POST"])
@@ -124,6 +174,11 @@ def receive_metrics():
         return jsonify({"error": "Invalid field types"}), 400
 
     insert_metric(metric)
+
+    details = payload.get("details")
+    if isinstance(details, dict):
+        upsert_host_details(metric["hostname"], details)
+
     return jsonify({"status": "ok"})
 
 
@@ -147,6 +202,19 @@ def data_endpoint():
         for row in rows
     ]
     return jsonify({"count": len(metrics), "data": metrics})
+
+
+@app.route("/details", methods=["GET"])
+def details_endpoint():
+    hostname = request.args.get("hostname")
+    if not hostname:
+        return jsonify({"error": "hostname query parameter required"}), 400
+
+    record = get_host_details(hostname)
+    if not record:
+        return jsonify({"error": "hostname not found"}), 404
+
+    return jsonify(record)
 
 
 @app.route("/dashboard", methods=["GET"])
