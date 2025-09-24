@@ -7,12 +7,18 @@
     <title>System Metrics Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Inter', 'Segoe UI', Roboto, Arial, sans-serif;
             margin: 0;
             padding: 0 20px 48px;
             background: linear-gradient(180deg, #f3f8ff 0%, #eef2ff 100%);
             color: #1f2933;
+            line-height: 1.5;
+            overflow-x: hidden;
         }
 
         header {
@@ -35,9 +41,32 @@
 
         .filters {
             display: flex;
+            flex-wrap: wrap;
             justify-content: center;
-            gap: 20px;
-            margin-bottom: 20px;
+            align-items: flex-start;
+            gap: 12px 20px;
+            margin: 0 auto 24px;
+            max-width: 1080px;
+            width: 100%;
+        }
+
+        .filter-control {
+            display: flex;
+            flex: 1 1 240px;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 200px;
+        }
+
+        .filter-actions {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            align-self: stretch;
+        }
+
+        .filter-actions .ghost-button {
+            min-width: 180px;
         }
 
         .status {
@@ -48,6 +77,17 @@
             padding: 20px 24px;
             border-radius: 16px;
             box-shadow: 0 20px 40px rgba(15, 35, 95, 0.08);
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .status > div {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
         }
 
         .status-label {
@@ -59,9 +99,10 @@
         .status-hostlist {
             list-style: none;
             padding: 0;
-            margin: 12px 0 0;
+            margin: 0;
             display: grid;
-            gap: 6px;
+            gap: 6px 16px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             color: #4c5f7c;
             font-size: 0.95rem;
         }
@@ -73,6 +114,7 @@
             padding: 24px 28px;
             border-radius: 18px;
             box-shadow: 0 24px 48px rgba(12, 40, 90, 0.08);
+            width: 100%;
         }
 
         .chart-container h2 {
@@ -83,7 +125,8 @@
 
         label {
             font-weight: 600;
-            margin-right: 8px;
+            margin: 0 0 4px;
+            display: block;
             color: #31446c;
         }
 
@@ -94,6 +137,7 @@
             background: #ffffff;
             color: #1f2933;
             box-shadow: 0 6px 12px rgba(80, 112, 196, 0.12);
+            width: 100%;
         }
 
         select:focus {
@@ -125,6 +169,8 @@
         }
 
         canvas {
+            width: 100%;
+            display: block;
             max-height: 320px;
         }
 
@@ -355,6 +401,77 @@
         .btn-danger:hover {
             opacity: 0.9;
         }
+
+        @media (min-width: 769px) {
+            .filters {
+                justify-content: space-between;
+                align-items: flex-end;
+            }
+
+            .filter-actions {
+                align-self: flex-end;
+            }
+
+            .status {
+                flex-direction: row;
+                align-items: flex-start;
+                gap: 24px;
+            }
+
+            .status-hostlist {
+                justify-items: end;
+            }
+        }
+
+        @media (max-width: 900px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            .chart-container {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 0 16px 40px;
+            }
+
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-control,
+            .filter-actions {
+                width: 100%;
+                min-width: unset;
+            }
+
+            .ghost-button {
+                width: 100%;
+                text-align: center;
+            }
+
+            .status {
+                padding: 18px 20px;
+            }
+
+            .chart-container {
+                padding: 18px 20px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            header p {
+                font-size: 0.95rem;
+            }
+
+            canvas {
+                max-height: 260px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -364,7 +481,7 @@
     </header>
 
     <section class="filters">
-        <div>
+        <div class="filter-control">
             <label for="hostnameFilter">Hostname</label>
             <select id="hostnameFilter">
                 <option value="">All Hosts</option>
@@ -373,7 +490,7 @@
                 {% endfor %}
             </select>
         </div>
-        <div>
+        <div class="filter-control">
             <label for="timeframeFilter">Timeframe</label>
             <select id="timeframeFilter">
                 <option value="">All Data</option>
@@ -384,7 +501,7 @@
                 {% endfor %}
             </select>
         </div>
-        <div>
+        <div class="filter-actions">
             <button id="manageHostsButton" class="ghost-button" type="button" title="Manage hosts">
                 ⚙️ Manage hosts
             </button>
