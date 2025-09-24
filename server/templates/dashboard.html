@@ -7,6 +7,94 @@
     <title>System Metrics Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {
+            color-scheme: light;
+            --color-body-bg: linear-gradient(180deg, #f3f8ff 0%, #eef2ff 100%);
+            --color-text: #1f2933;
+            --color-text-muted: #5b6b82;
+            --color-title: #122659;
+            --color-label: #31446c;
+            --color-status-label: #2b3f64;
+            --color-status-list: #4c5f7c;
+            --color-panel-bg: rgba(255, 255, 255, 0.85);
+            --color-card-bg: rgba(255, 255, 255, 0.9);
+            --color-card-border: rgba(93, 121, 255, 0.08);
+            --color-card-shadow: 0 24px 48px rgba(12, 40, 90, 0.08);
+            --color-chart-container-bg: #ffffff;
+            --color-input-bg: #ffffff;
+            --color-input-border: #c8d4f2;
+            --color-input-shadow: rgba(80, 112, 196, 0.12);
+            --color-input-focus-border: #5a7bff;
+            --color-input-focus-ring: rgba(90, 123, 255, 0.25);
+            --color-button-bg: rgba(255, 255, 255, 0.8);
+            --color-button-border: rgba(90, 102, 255, 0.25);
+            --color-button-text: #31446c;
+            --color-button-shadow: rgba(80, 112, 196, 0.15);
+            --color-button-shadow-hover: rgba(80, 112, 196, 0.2);
+            --color-card-heading: #142857;
+            --color-card-text: #1f2933;
+            --color-card-muted: #5a6d8f;
+            --color-card-emphasis: #253ef8;
+            --color-progress-bg: #edf1ff;
+            --color-stat-foot: #4c5f7c;
+            --color-uptime-highlight: #1e46ff;
+            --color-modal-overlay: rgba(15, 23, 42, 0.45);
+            --color-modal-bg: #ffffff;
+            --color-host-card-bg: rgba(245, 248, 255, 0.7);
+            --color-host-meta: #31446c;
+            --color-card-icon-bg-start: #eff3ff;
+            --color-card-icon-bg-end: #dae2ff;
+            --color-card-icon-text: #3b55e6;
+            --color-chart-text: #1f2933;
+            --color-chart-grid: rgba(31, 50, 90, 0.12);
+            --color-chart-tooltip-bg: rgba(15, 23, 42, 0.85);
+            --color-chart-tooltip-text: #f8fafc;
+        }
+
+        body.theme-dark {
+            color-scheme: dark;
+            --color-body-bg: linear-gradient(180deg, #0f1729 0%, #111827 100%);
+            --color-text: #e2e8f0;
+            --color-text-muted: #94a3c9;
+            --color-title: #f8fafc;
+            --color-label: #cbd5f5;
+            --color-status-label: #b3c6ff;
+            --color-status-list: #d2dcff;
+            --color-panel-bg: rgba(24, 33, 56, 0.82);
+            --color-card-bg: rgba(17, 24, 39, 0.82);
+            --color-card-border: rgba(129, 140, 248, 0.25);
+            --color-card-shadow: 0 24px 48px rgba(8, 12, 28, 0.6);
+            --color-chart-container-bg: rgba(24, 31, 47, 0.94);
+            --color-input-bg: rgba(30, 41, 59, 0.55);
+            --color-input-border: rgba(99, 115, 154, 0.55);
+            --color-input-shadow: rgba(30, 64, 175, 0.35);
+            --color-input-focus-border: #7c9dff;
+            --color-input-focus-ring: rgba(124, 157, 255, 0.35);
+            --color-button-bg: rgba(59, 73, 150, 0.55);
+            --color-button-border: rgba(129, 140, 248, 0.55);
+            --color-button-text: #e5ebff;
+            --color-button-shadow: rgba(12, 20, 50, 0.55);
+            --color-button-shadow-hover: rgba(37, 56, 120, 0.65);
+            --color-card-heading: #f8fafc;
+            --color-card-text: #e0e7ff;
+            --color-card-muted: #9aa9d9;
+            --color-card-emphasis: #98b1ff;
+            --color-progress-bg: rgba(45, 55, 72, 0.6);
+            --color-stat-foot: #adb9e6;
+            --color-uptime-highlight: #8ba8ff;
+            --color-modal-overlay: rgba(8, 12, 22, 0.75);
+            --color-modal-bg: #1f2937;
+            --color-host-card-bg: rgba(30, 41, 59, 0.6);
+            --color-host-meta: #cbd5f5;
+            --color-card-icon-bg-start: rgba(59, 73, 150, 0.6);
+            --color-card-icon-bg-end: rgba(99, 102, 241, 0.85);
+            --color-card-icon-text: #eef2ff;
+            --color-chart-text: #e2e8f0;
+            --color-chart-grid: rgba(148, 163, 200, 0.25);
+            --color-chart-tooltip-bg: rgba(8, 12, 22, 0.9);
+            --color-chart-tooltip-text: #f8fafc;
+        }
+
         *, *::before, *::after {
             box-sizing: border-box;
         }
@@ -15,10 +103,11 @@
             font-family: 'Inter', 'Segoe UI', Roboto, Arial, sans-serif;
             margin: 0;
             padding: 0 20px 48px;
-            background: linear-gradient(180deg, #f3f8ff 0%, #eef2ff 100%);
-            color: #1f2933;
+            background: var(--color-body-bg);
+            color: var(--color-text);
             line-height: 1.5;
             overflow-x: hidden;
+            transition: background 0.4s ease, color 0.3s ease;
         }
 
         header {
@@ -30,12 +119,12 @@
             margin: 0;
             font-size: 2.2rem;
             font-weight: 600;
-            color: #122659;
+            color: var(--color-title);
         }
 
         header p {
             margin: 8px 0 0;
-            color: #5b6b82;
+            color: var(--color-text-muted);
             font-size: 1rem;
         }
 
@@ -63,6 +152,8 @@
             align-items: flex-end;
             justify-content: center;
             align-self: stretch;
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
         .filter-actions .ghost-button {
@@ -72,15 +163,16 @@
         .status {
             max-width: 1080px;
             margin: 0 auto 24px;
-            background: rgba(255, 255, 255, 0.85);
+            background: var(--color-panel-bg);
             backdrop-filter: blur(16px);
             padding: 20px 24px;
             border-radius: 16px;
-            box-shadow: 0 20px 40px rgba(15, 35, 95, 0.08);
+            box-shadow: var(--color-card-shadow);
             display: flex;
             flex-direction: column;
             flex-wrap: wrap;
             gap: 16px;
+            transition: background 0.4s ease, box-shadow 0.4s ease, color 0.3s ease;
         }
 
         .status > div {
@@ -93,7 +185,7 @@
         .status-label {
             font-weight: 600;
             margin-right: 8px;
-            color: #2b3f64;
+            color: var(--color-status-label);
         }
 
         .status-hostlist {
@@ -103,23 +195,24 @@
             display: grid;
             gap: 6px 16px;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            color: #4c5f7c;
+            color: var(--color-status-list);
             font-size: 0.95rem;
         }
 
         .chart-container {
             max-width: 1080px;
             margin: 0 auto 32px;
-            background: #ffffff;
+            background: var(--color-chart-container-bg);
             padding: 24px 28px;
             border-radius: 18px;
-            box-shadow: 0 24px 48px rgba(12, 40, 90, 0.08);
+            box-shadow: var(--color-card-shadow);
             width: 100%;
+            transition: background 0.4s ease, box-shadow 0.4s ease, color 0.3s ease;
         }
 
         .chart-container h2 {
             margin-top: 0;
-            color: #1a2a4a;
+            color: var(--color-card-heading);
             font-size: 1.2rem;
         }
 
@@ -127,45 +220,46 @@
             font-weight: 600;
             margin: 0 0 4px;
             display: block;
-            color: #31446c;
+            color: var(--color-label);
         }
 
         select {
             padding: 8px 14px;
             border-radius: 10px;
-            border: 1px solid #c8d4f2;
-            background: #ffffff;
-            color: #1f2933;
-            box-shadow: 0 6px 12px rgba(80, 112, 196, 0.12);
+            border: 1px solid var(--color-input-border);
+            background: var(--color-input-bg);
+            color: var(--color-text);
+            box-shadow: 0 6px 12px var(--color-input-shadow);
             width: 100%;
+            transition: background 0.4s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
         }
 
         select:focus {
             outline: none;
-            border-color: #5a7bff;
-            box-shadow: 0 0 0 3px rgba(90, 123, 255, 0.25);
+            border-color: var(--color-input-focus-border);
+            box-shadow: 0 0 0 3px var(--color-input-focus-ring);
         }
 
         .ghost-button {
             padding: 8px 14px;
             border-radius: 10px;
-            border: 1px solid rgba(90, 102, 255, 0.25);
-            background: rgba(255, 255, 255, 0.8);
-            color: #31446c;
+            border: 1px solid var(--color-button-border);
+            background: var(--color-button-bg);
+            color: var(--color-button-text);
             font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 6px 12px rgba(80, 112, 196, 0.15);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 6px 12px var(--color-button-shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
         }
 
         .ghost-button:hover {
             transform: translateY(-1px);
-            box-shadow: 0 12px 24px rgba(80, 112, 196, 0.2);
+            box-shadow: 0 12px 24px var(--color-button-shadow-hover);
         }
 
         .ghost-button:focus {
             outline: none;
-            border-color: #5a7bff;
+            border-color: var(--color-input-focus-border);
         }
 
         canvas {
@@ -190,14 +284,15 @@
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.9);
+            background: var(--color-card-bg);
             border-radius: 20px;
             padding: 22px 24px;
-            box-shadow: 0 24px 48px rgba(12, 40, 90, 0.08);
+            box-shadow: var(--color-card-shadow);
             display: flex;
             flex-direction: column;
             gap: 16px;
-            border: 1px solid rgba(93, 121, 255, 0.08);
+            border: 1px solid var(--color-card-border);
+            transition: background 0.4s ease, box-shadow 0.4s ease, border-color 0.3s ease, color 0.3s ease;
         }
 
         .card-header {
@@ -214,15 +309,15 @@
             align-items: center;
             justify-content: center;
             font-size: 1.3rem;
-            background: linear-gradient(135deg, #eff3ff 0%, #dae2ff 100%);
-            color: #3b55e6;
+            background: linear-gradient(135deg, var(--color-card-icon-bg-start) 0%, var(--color-card-icon-bg-end) 100%);
+            color: var(--color-card-icon-text);
         }
 
         .card h3 {
             margin: 0;
             font-size: 1.1rem;
             font-weight: 600;
-            color: #142857;
+            color: var(--color-card-heading);
         }
 
         .card-body {
@@ -244,25 +339,25 @@
 
         .stat-label {
             font-weight: 600;
-            color: #5a6d8f;
+            color: var(--color-card-muted);
         }
 
         .stat-value {
             font-weight: 500;
-            color: #1f2933;
+            color: var(--color-card-text);
             text-align: right;
         }
 
         .stat-value.emphasis {
             font-weight: 700;
-            color: #253ef8;
+            color: var(--color-card-emphasis);
         }
 
         .progress {
             width: 100%;
             height: 10px;
             border-radius: 999px;
-            background: #edf1ff;
+            background: var(--color-progress-bg);
             overflow: hidden;
         }
 
@@ -287,26 +382,26 @@
 
         .stat-foot {
             font-size: 0.92rem;
-            color: #4c5f7c;
+            color: var(--color-stat-foot);
         }
 
         .uptime-highlight {
             font-size: 2.1rem;
             font-weight: 700;
-            color: #1e46ff;
+            color: var(--color-uptime-highlight);
             text-align: center;
         }
 
         .uptime-subtext {
             text-align: center;
-            color: #5a6d8f;
+            color: var(--color-card-muted);
             font-size: 0.95rem;
         }
 
         .modal-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(15, 23, 42, 0.45);
+            background: var(--color-modal-overlay);
             backdrop-filter: blur(6px);
             display: flex;
             align-items: center;
@@ -319,7 +414,7 @@
         }
 
         .modal {
-            background: #ffffff;
+            background: var(--color-modal-bg);
             border-radius: 20px;
             padding: 28px;
             width: min(720px, 90vw);
@@ -327,6 +422,7 @@
             display: flex;
             flex-direction: column;
             gap: 18px;
+            transition: background 0.4s ease, color 0.3s ease;
         }
 
         .modal-header {
@@ -338,7 +434,7 @@
         .modal-header h2 {
             margin: 0;
             font-size: 1.4rem;
-            color: #142857;
+            color: var(--color-card-heading);
         }
 
         .modal-close {
@@ -346,7 +442,7 @@
             border: none;
             font-size: 1.4rem;
             cursor: pointer;
-            color: #5a6d8f;
+            color: var(--color-card-muted);
         }
 
         .host-list {
@@ -355,23 +451,24 @@
         }
 
         .host-card {
-            border: 1px solid rgba(93, 121, 255, 0.1);
+            border: 1px solid var(--color-card-border);
             border-radius: 14px;
             padding: 16px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(245, 248, 255, 0.7);
+            background: var(--color-host-card-bg);
+            transition: background 0.4s ease, border-color 0.3s ease, color 0.3s ease;
         }
 
         .host-meta {
             display: grid;
             gap: 4px;
-            color: #31446c;
+            color: var(--color-host-meta);
         }
 
         .host-meta strong {
-            color: #142857;
+            color: var(--color-card-heading);
         }
 
         .host-actions {
@@ -474,7 +571,7 @@
         }
     </style>
 </head>
-<body>
+<body class="theme-light">
     <header>
         <h1>System Metrics Dashboard</h1>
         <p>Live CPU, RAM, and Disk utilization reported by monitoring clients.</p>
@@ -502,6 +599,9 @@
             </select>
         </div>
         <div class="filter-actions">
+            <button id="themeToggleButton" class="ghost-button" type="button" title="Toggle theme">
+                🌙 Dark theme
+            </button>
             <button id="manageHostsButton" class="ghost-button" type="button" title="Manage hosts">
                 ⚙️ Manage hosts
             </button>
@@ -650,6 +750,7 @@
         const hostUpdateList = document.getElementById('hostUpdateList');
         const detailsSection = document.getElementById('hostDetailsSection');
         const manageHostsButton = document.getElementById('manageHostsButton');
+        const themeToggleButton = document.getElementById('themeToggleButton');
         const hostModal = document.getElementById('hostModal');
         const closeHostModal = document.getElementById('closeHostModal');
         const hostList = document.getElementById('hostList');
@@ -692,6 +793,110 @@
         let lastDetailsUpdatedAt = null;
         let knownHosts = new Set(Array.from(hostnameFilter.options).slice(1).map(option => option.value));
 
+        const themeStorageKey = 'dashboardTheme';
+        const bodyElement = document.body;
+
+        const charts = [];
+        const getChartStyles = () => {
+            const computed = getComputedStyle(bodyElement);
+            const resolve = (property, fallback) => {
+                const value = computed.getPropertyValue(property);
+                return value ? value.trim() : fallback;
+            };
+
+            return {
+                text: resolve('--color-chart-text', '#1f2933'),
+                grid: resolve('--color-chart-grid', 'rgba(31, 50, 90, 0.12)'),
+                tooltipBg: resolve('--color-chart-tooltip-bg', 'rgba(15, 23, 42, 0.85)'),
+                tooltipText: resolve('--color-chart-tooltip-text', '#f8fafc'),
+            };
+        };
+
+        let currentChartStyles = getChartStyles();
+
+        const applyChartStyles = (chart, styles) => {
+            if (!chart) return;
+
+            if (chart.options?.scales?.x) {
+                chart.options.scales.x.ticks = {
+                    ...chart.options.scales.x.ticks,
+                    color: styles.text,
+                };
+                chart.options.scales.x.grid = {
+                    ...chart.options.scales.x.grid,
+                    color: styles.grid,
+                };
+            }
+
+            if (chart.options?.scales?.y) {
+                chart.options.scales.y.ticks = {
+                    ...chart.options.scales.y.ticks,
+                    color: styles.text,
+                };
+                chart.options.scales.y.grid = {
+                    ...chart.options.scales.y.grid,
+                    color: styles.grid,
+                };
+            }
+
+            if (chart.options?.plugins?.legend?.labels) {
+                chart.options.plugins.legend.labels.color = styles.text;
+            }
+
+            if (chart.options?.plugins?.tooltip) {
+                chart.options.plugins.tooltip.backgroundColor = styles.tooltipBg;
+                chart.options.plugins.tooltip.titleColor = styles.tooltipText;
+                chart.options.plugins.tooltip.bodyColor = styles.tooltipText;
+                chart.options.plugins.tooltip.borderColor = styles.grid;
+            }
+
+            chart.update('none');
+        };
+
+        const refreshChartTheme = () => {
+            currentChartStyles = getChartStyles();
+            charts.forEach(chart => applyChartStyles(chart, currentChartStyles));
+        };
+
+        const updateThemeToggleLabel = (theme) => {
+            if (!themeToggleButton) return;
+            themeToggleButton.textContent = theme === 'theme-dark' ? '☀️ Light theme' : '🌙 Dark theme';
+        };
+
+        const applyTheme = (theme) => {
+            const nextTheme = theme === 'theme-dark' ? 'theme-dark' : 'theme-light';
+            bodyElement.classList.remove('theme-light', 'theme-dark');
+            bodyElement.classList.add(nextTheme);
+            try {
+                localStorage.setItem(themeStorageKey, nextTheme);
+            } catch (error) {
+                console.warn('Unable to persist theme preference:', error);
+            }
+            updateThemeToggleLabel(nextTheme);
+            refreshChartTheme();
+        };
+
+        let storedTheme = null;
+        try {
+            storedTheme = localStorage.getItem(themeStorageKey);
+        } catch (error) {
+            console.warn('Unable to read saved theme preference:', error);
+        }
+
+        if (storedTheme) {
+            applyTheme(storedTheme);
+        } else {
+            updateThemeToggleLabel(bodyElement.classList.contains('theme-dark') ? 'theme-dark' : 'theme-light');
+            currentChartStyles = getChartStyles();
+        }
+
+        if (themeToggleButton) {
+            themeToggleButton.addEventListener('click', () => {
+                const isDark = bodyElement.classList.contains('theme-dark');
+                applyTheme(isDark ? 'theme-light' : 'theme-dark');
+            });
+        }
+
         const chartConfig = (label, borderColor, backgroundColor) => ({
             type: 'line',
             data: {
@@ -703,27 +908,53 @@
                     borderColor,
                     backgroundColor,
                     tension: 0.25,
-                }]
+                }],
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: currentChartStyles.text,
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: currentChartStyles.tooltipBg,
+                        titleColor: currentChartStyles.tooltipText,
+                        bodyColor: currentChartStyles.tooltipText,
+                        borderColor: currentChartStyles.grid,
+                        borderWidth: 1,
+                    },
+                },
                 scales: {
                     x: {
                         ticks: {
                             autoSkip: true,
                             maxTicksLimit: 10,
-                        }
+                            color: currentChartStyles.text,
+                        },
+                        grid: {
+                            color: currentChartStyles.grid,
+                        },
                     },
                     y: {
                         min: 0,
                         max: 100,
                         ticks: {
-                            stepSize: 10
-                        }
-                    }
-                }
-            }
+                            stepSize: 10,
+                            color: currentChartStyles.text,
+                        },
+                        grid: {
+                            color: currentChartStyles.grid,
+                        },
+                    },
+                },
+            },
         });
 
         const cpuChart = new Chart(document.getElementById('cpuChart'), chartConfig('CPU %', '#ff6384', 'rgba(255, 99, 132, 0.2)'));
@@ -754,22 +985,51 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: currentChartStyles.text,
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: currentChartStyles.tooltipBg,
+                        titleColor: currentChartStyles.tooltipText,
+                        bodyColor: currentChartStyles.tooltipText,
+                        borderColor: currentChartStyles.grid,
+                        borderWidth: 1,
+                    },
+                },
                 scales: {
                     x: {
                         ticks: {
                             autoSkip: true,
                             maxTicksLimit: 10,
+                            color: currentChartStyles.text,
+                        },
+                        grid: {
+                            color: currentChartStyles.grid,
                         },
                     },
                     y: {
                         beginAtZero: true,
                         ticks: {
                             callback: (value) => `${value} MB/s`,
+                            color: currentChartStyles.text,
+                        },
+                        grid: {
+                            color: currentChartStyles.grid,
                         },
                     },
                 },
             },
         });
+
+        charts.push(cpuChart, ramChart, diskChart);
+        refreshChartTheme();
 
         function buildQueryParams() {
             const params = new URLSearchParams();
