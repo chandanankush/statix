@@ -136,6 +136,7 @@ Set the required environment variables before running (as shown above). Stop wit
     </dict>
   </plist>
   ```
+  
    Update `USERNAME` (and the Python binary paths) to match the account you deploy under.
 
 2. Load and start:
