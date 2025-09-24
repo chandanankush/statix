@@ -120,6 +120,96 @@ Set the required environment variables before running (as shown above). Stop wit
 ```
 - `GET /health` – `{ "status": "ok" }`.
 
+## Payload Sent to the Monitoring Server
+The `system-stats-forwarder` polls `/system`, flattens the headline utilisation metrics, and POSTs the following JSON
+document to the monitoring server’s `/metrics` endpoint:
+
+```jsonc
+{
+  "hostname": "chandan-mac-mini.local",       // string reported by socket.gethostname()
+  "cpu": 12.5,                                 // float CPU utilisation percentage
+  "ram": 54.2,                                 // float RAM utilisation percentage
+  "disk": 38.7,                                // float primary disk utilisation percentage
+  "timestamp": 1737718500,                     // unix epoch seconds when the reading was taken
+  "disk_read": 1.23,                           // calculated MB/s read throughput between polls
+  "disk_write": 0.45,                          // calculated MB/s write throughput between polls
+  "details": {                                 // full snapshot from GET /system (see above)
+    "cpu": { ... },
+    "memory": { ... },
+    "disk": { ... },
+    "network": { ... },
+    "uptime": { ... },
+    "system": { ... },
+    "disk_io": { ... },
+    "throughput": {
+      "disk_read_bytes_per_sec": 129394.5,
+      "disk_write_bytes_per_sec": 48573.2,
+      "disk_read_mb_per_sec": 0.12,
+      "disk_write_mb_per_sec": 0.05
+    }
+  }
+}
+```
+
+`disk_read` and `disk_write` default to `0.0` if throughput cannot be computed (e.g., during the first poll). The
+`details` object is optional but recommended because the dashboard uses it to populate the host summary cards.
+
+Example payload captured in the field:
+
+```json
+{
+  "hostname": "chandan-mac-mini.local",
+  "cpu": 18.4,
+  "ram": 57.9,
+  "disk": 41.2,
+  "timestamp": 1737718500,
+  "disk_read": 0.18,
+  "disk_write": 0.09,
+  "details": {
+    "collected_at": "2025-09-23T16:18:12.743209+00:00",
+    "cpu": {
+      "percent": 18.4,
+      "logical_cores": 12,
+      "physical_cores": 12,
+      "frequency": {"current": 3200.0, "min": 800.0, "max": 3200.0}
+    },
+    "memory": {
+      "percent": 57.9,
+      "total": 34359738368,
+      "available": 14411518807,
+      "used": 19948219561,
+      "swap": {"percent": 12.6, "total": 4294967296, "used": 540672000}
+    },
+    "disk": {"percent": 41.2, "mount": "/", "total": 512110190592, "used": 210763776000},
+    "disk_io": {"read_bytes": 11811160064, "write_bytes": 6871947673},
+    "network": {
+      "primary_interface": {
+        "name": "en1",
+        "ipv4": "192.168.0.82",
+        "mtu": 1500,
+        "speed_mbps": 1000
+      }
+    },
+    "throughput": {
+      "disk_read_bytes_per_sec": 188432.0,
+      "disk_write_bytes_per_sec": 94321.0,
+      "disk_read_mb_per_sec": 0.18,
+      "disk_write_mb_per_sec": 0.09
+    },
+    "uptime": {
+      "human": "1 day, 2:17:15",
+      "boot_time": "2025-09-22T14:01:15+05:30"
+    },
+    "system": {
+      "hostname": "chandan-mac-mini.local",
+      "model": "Mac16,11",
+      "os": "macOS",
+      "os_release": "14.0"
+    }
+  }
+}
+```
+
 ## Background Services
 Templates under `service/` help run the agent and forwarder:
 - `service/systemd/system-stats.service` – systemd unit. Duplicate/modify for separate forwarder unit if desired.
