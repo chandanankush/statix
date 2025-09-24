@@ -126,7 +126,7 @@ document to the monitoring server’s `/metrics` endpoint:
 
 ```jsonc
 {
-  "hostname": "chandan-studio.local",       // string reported by socket.gethostname()
+  "hostname": "chandan-mac-mini.local",       // string reported by socket.gethostname()
   "cpu": 12.5,                                 // float CPU utilisation percentage
   "ram": 54.2,                                 // float RAM utilisation percentage
   "disk": 38.7,                                // float primary disk utilisation percentage
@@ -154,13 +154,66 @@ document to the monitoring server’s `/metrics` endpoint:
 `disk_read` and `disk_write` default to `0.0` if throughput cannot be computed (e.g., during the first poll). The
 `details` object is optional but recommended because the dashboard uses it to populate the host summary cards.
 
+Example payload captured in the field:
+
+```json
+{
+  "hostname": "chandan-mac-mini.local",
+  "cpu": 18.4,
+  "ram": 57.9,
+  "disk": 41.2,
+  "timestamp": 1737718500,
+  "disk_read": 0.18,
+  "disk_write": 0.09,
+  "details": {
+    "collected_at": "2025-09-23T16:18:12.743209+00:00",
+    "cpu": {
+      "percent": 18.4,
+      "logical_cores": 12,
+      "physical_cores": 12,
+      "frequency": {"current": 3200.0, "min": 800.0, "max": 3200.0}
+    },
+    "memory": {
+      "percent": 57.9,
+      "total": 34359738368,
+      "available": 14411518807,
+      "used": 19948219561,
+      "swap": {"percent": 12.6, "total": 4294967296, "used": 540672000}
+    },
+    "disk": {"percent": 41.2, "mount": "/", "total": 512110190592, "used": 210763776000},
+    "disk_io": {"read_bytes": 11811160064, "write_bytes": 6871947673},
+    "network": {
+      "primary_interface": {
+        "name": "en1",
+        "ipv4": "192.168.0.82",
+        "mtu": 1500,
+        "speed_mbps": 1000
+      }
+    },
+    "throughput": {
+      "disk_read_bytes_per_sec": 188432.0,
+      "disk_write_bytes_per_sec": 94321.0,
+      "disk_read_mb_per_sec": 0.18,
+      "disk_write_mb_per_sec": 0.09
+    },
+    "uptime": {
+      "human": "1 day, 2:17:15",
+      "boot_time": "2025-09-22T14:01:15+05:30"
+    },
+    "system": {
+      "hostname": "chandan-mac-mini.local",
+      "model": "Mac16,11",
+      "os": "macOS",
+      "os_release": "14.0"
+    }
+  }
+}
+```
+
 ## Background Services
 Templates under `service/` help run the agent and forwarder:
 - `service/systemd/system-stats.service` – systemd unit. Duplicate/modify for separate forwarder unit if desired.
-- `service/launchd/com.local.systemstats.plist` – launchd plist for the user-level forwarder on macOS.
-- `service/launchd/com.local.systemstats.service.plist` – launchd plist that keeps the FastAPI daemon alive on macOS hosts, where `launchd` replaces systemd for managing long-running services.
-
-On macOS specifically, `launchd` is the native service manager, so installing `com.local.systemstats.service.plist` (e.g. into `~/Library/LaunchAgents/`) ensures the FastAPI process restarts after reboots and user logins. Without it, the service would only run while your terminal session stays alive, leaving the monitoring stack without local metrics after a restart.
+- `service/launchd/com.local.systemstats.plist` – launchd plist for macOS (user-level).
 
 ### Example systemd Forwarder Unit
 ```ini

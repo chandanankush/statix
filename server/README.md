@@ -67,7 +67,7 @@ The monitoring server expects the client/forwarder to POST JSON shaped as:
 
 ```jsonc
 {
-  "hostname": "chandan-studio.local",       // string host identifier
+  "hostname": "chandan-mac-mini.local",       // string host identifier
   "cpu": 12.5,                                 // float CPU utilisation percentage
   "ram": 54.2,                                 // float RAM utilisation percentage
   "disk": 38.7,                                // float primary disk utilisation percentage
@@ -80,6 +80,62 @@ The monitoring server expects the client/forwarder to POST JSON shaped as:
 
 When `details` is supplied it should be the same structure returned by the client’s `/system` endpoint (see
 `client/README.md`). Unknown top-level fields are ignored.
+
+Example payload captured from the forwarder:
+
+```json
+{
+  "hostname": "chandan-mac-mini.local",
+  "cpu": 18.4,
+  "ram": 57.9,
+  "disk": 41.2,
+  "timestamp": 1737718500,
+  "disk_read": 0.18,
+  "disk_write": 0.09,
+  "details": {
+    "collected_at": "2025-09-23T16:18:12.743209+00:00",
+    "cpu": {
+      "percent": 18.4,
+      "logical_cores": 12,
+      "physical_cores": 12,
+      "frequency": {"current": 3200.0, "min": 800.0, "max": 3200.0}
+    },
+    "memory": {
+      "percent": 57.9,
+      "total": 34359738368,
+      "available": 14411518807,
+      "used": 19948219561,
+      "swap": {"percent": 12.6, "total": 4294967296, "used": 540672000}
+    },
+    "disk": {"percent": 41.2, "mount": "/", "total": 512110190592, "used": 210763776000},
+    "disk_io": {"read_bytes": 11811160064, "write_bytes": 6871947673},
+    "network": {
+      "primary_interface": {
+        "name": "en1",
+        "ipv4": "192.168.0.82",
+        "mtu": 1500,
+        "speed_mbps": 1000
+      }
+    },
+    "throughput": {
+      "disk_read_bytes_per_sec": 188432.0,
+      "disk_write_bytes_per_sec": 94321.0,
+      "disk_read_mb_per_sec": 0.18,
+      "disk_write_mb_per_sec": 0.09
+    },
+    "uptime": {
+      "human": "1 day, 2:17:15",
+      "boot_time": "2025-09-22T14:01:15+05:30"
+    },
+    "system": {
+      "hostname": "chandan-mac-mini.local",
+      "model": "Mac16,11",
+      "os": "macOS",
+      "os_release": "14.0"
+    }
+  }
+}
+```
 
 ### Compose
 `docker-compose.yml` handles build/run and persists data using the `server_data` named volume. Launch with `docker-compose up --build -d`.
