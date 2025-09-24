@@ -581,7 +581,7 @@
         <div class="filter-control">
             <label for="hostnameFilter">Hostname</label>
             <select id="hostnameFilter">
-                <option value="">All Hosts</option>
+                <option value="__auto__" selected>Auto cycle hosts</option>
                 {% for host in hostnames %}
                 <option value="{{ host }}">{{ host }}</option>
                 {% endfor %}
@@ -792,6 +792,103 @@
         let lastDetailsHostname = null;
         let lastDetailsUpdatedAt = null;
         let knownHosts = new Set(Array.from(hostnameFilter.options).slice(1).map(option => option.value));
+
+        const AUTO_CYCLE_VALUE = '__auto__';
+        const AUTO_CYCLE_INTERVAL_MS = 10000;
+        let hostRotationList = Array.from(hostnameFilter.options)
+            .filter(option => option.value && option.value !== AUTO_CYCLE_VALUE)
+            .map(option => option.value);
+        let autoCycleTimer = null;
+        let autoCycleIndex = 0;
+        let autoCycleActive = hostnameFilter.value === AUTO_CYCLE_VALUE && hostRotationList.length > 0;
+        let currentAutoHostname = hostRotationList.length ? hostRotationList[0] : null;
+
+        const getAutoCycleOption = () => hostnameFilter.querySelector(`option[value="${AUTO_CYCLE_VALUE}"]`);
+
+        const refreshAutoCycleOptionLabel = () => {
+            const option = getAutoCycleOption();
+            if (!option) {
+                return;
+            }
+            if (!hostRotationList.length) {
+                option.textContent = 'No hosts available';
+                option.disabled = true;
+                return;
+            }
+
+            option.disabled = false;
+            const activeHost = autoCycleActive && currentAutoHostname && hostRotationList.includes(currentAutoHostname)
+                ? currentAutoHostname
+                : null;
+            option.textContent = activeHost ? `Auto cycle (${activeHost})` : 'Auto cycle hosts';
+        };
+
+        const clearAutoCycleTimer = () => {
+            if (autoCycleTimer) {
+                clearInterval(autoCycleTimer);
+                autoCycleTimer = null;
+            }
+        };
+
+        const setCurrentAutoHostname = (hostname) => {
+            if (hostname && hostRotationList.includes(hostname)) {
+                currentAutoHostname = hostname;
+                autoCycleIndex = hostRotationList.indexOf(hostname);
+            } else {
+                currentAutoHostname = hostRotationList.length ? hostRotationList[0] : null;
+                autoCycleIndex = currentAutoHostname ? hostRotationList.indexOf(currentAutoHostname) : 0;
+            }
+            refreshAutoCycleOptionLabel();
+        };
+
+        const startAutoCycle = () => {
+            if (!hostRotationList.length) {
+                autoCycleActive = false;
+                clearAutoCycleTimer();
+                setCurrentAutoHostname(null);
+                return;
+            }
+
+            autoCycleActive = true;
+            if (!currentAutoHostname || !hostRotationList.includes(currentAutoHostname)) {
+                setCurrentAutoHostname(hostRotationList[0]);
+            } else {
+                autoCycleIndex = hostRotationList.indexOf(currentAutoHostname);
+                refreshAutoCycleOptionLabel();
+            }
+
+            clearAutoCycleTimer();
+            autoCycleTimer = setInterval(() => {
+                if (!hostRotationList.length) {
+                    stopAutoCycle(true);
+                    return;
+                }
+                autoCycleIndex = (autoCycleIndex + 1) % hostRotationList.length;
+                setCurrentAutoHostname(hostRotationList[autoCycleIndex]);
+                fetchMetrics();
+            }, AUTO_CYCLE_INTERVAL_MS);
+
+            fetchMetrics();
+        };
+
+        const stopAutoCycle = (resetHost = false) => {
+            clearAutoCycleTimer();
+            autoCycleActive = false;
+            if (resetHost) {
+                currentAutoHostname = hostRotationList.length ? hostRotationList[0] : null;
+                autoCycleIndex = currentAutoHostname ? hostRotationList.indexOf(currentAutoHostname) : 0;
+            }
+            refreshAutoCycleOptionLabel();
+        };
+
+        const getEffectiveHostname = () => {
+            if (hostnameFilter.value === AUTO_CYCLE_VALUE) {
+                return currentAutoHostname && knownHosts.has(currentAutoHostname) ? currentAutoHostname : null;
+            }
+            return hostnameFilter.value || null;
+        };
+
+        refreshAutoCycleOptionLabel();
 
         const themeStorageKey = 'dashboardTheme';
         const bodyElement = document.body;
@@ -1033,7 +1130,7 @@
 
         function buildQueryParams() {
             const params = new URLSearchParams();
-            const hostname = hostnameFilter.value;
+            const hostname = getEffectiveHostname();
             const timeframe = timeframeFilter.value;
             if (hostname) {
                 params.append('hostname', hostname);
@@ -1265,27 +1362,48 @@
         }
 
         function updateHostnameOptions(hosts) {
-            const previous = hostnameFilter.value;
+            const previousValue = hostnameFilter.value || AUTO_CYCLE_VALUE;
+            const wasAutoCycleSelected = previousValue === AUTO_CYCLE_VALUE || autoCycleActive;
+
             knownHosts = new Set(hosts.map(host => host.hostname));
+            hostRotationList = hosts.map(host => host.hostname);
+
             hostnameFilter.innerHTML = '';
-            const defaultOption = document.createElement('option');
-            defaultOption.value = '';
-            defaultOption.textContent = 'All Hosts';
-            hostnameFilter.appendChild(defaultOption);
+            const autoOption = document.createElement('option');
+            autoOption.value = AUTO_CYCLE_VALUE;
+            autoOption.textContent = hostRotationList.length ? 'Auto cycle hosts' : 'No hosts available';
+            autoOption.disabled = hostRotationList.length === 0;
+            hostnameFilter.appendChild(autoOption);
+
             hosts.forEach(host => {
                 const option = document.createElement('option');
                 option.value = host.hostname;
                 option.textContent = host.hostname;
                 hostnameFilter.appendChild(option);
             });
-            if (previous && knownHosts.has(previous)) {
-                hostnameFilter.value = previous;
-            } else {
-                hostnameFilter.value = '';
-                if (previous) {
-                    fetchMetrics();
-                }
+
+            if (!hostRotationList.length) {
+                hostnameFilter.value = AUTO_CYCLE_VALUE;
+                stopAutoCycle(true);
+                refreshAutoCycleOptionLabel();
+                hideDetails();
+                return;
             }
+
+            if (currentAutoHostname && !knownHosts.has(currentAutoHostname)) {
+                currentAutoHostname = null;
+            }
+
+            if (wasAutoCycleSelected || !knownHosts.has(previousValue)) {
+                hostnameFilter.value = AUTO_CYCLE_VALUE;
+                setCurrentAutoHostname(currentAutoHostname);
+                startAutoCycle();
+            } else {
+                hostnameFilter.value = previousValue;
+                stopAutoCycle();
+            }
+
+            refreshAutoCycleOptionLabel();
         }
 
         async function loadHosts() {
@@ -1380,7 +1498,11 @@
                     throw new Error(`Request failed: ${response.status}`);
                 }
                 if (hostnameFilter.value === hostname) {
-                    hostnameFilter.value = '';
+                    hostnameFilter.value = AUTO_CYCLE_VALUE;
+                    stopAutoCycle();
+                    currentAutoHostname = null;
+                    autoCycleIndex = 0;
+                    refreshAutoCycleOptionLabel();
                     hideDetails();
                 }
                 await loadHosts();
@@ -1448,6 +1570,17 @@
 
         async function fetchMetrics() {
             try {
+                const autoMode = hostnameFilter.value === AUTO_CYCLE_VALUE;
+                const effectiveHostname = getEffectiveHostname();
+                if (autoMode && !effectiveHostname) {
+                    updateChartData(cpuChart, [], 'cpu');
+                    updateChartData(ramChart, [], 'ram');
+                    updateDiskChart([]);
+                    updateStatus([]);
+                    hideDetails();
+                    return;
+                }
+
                 const query = buildQueryParams();
                 const response = await fetch(`/data${query ? '?' + query : ''}`);
                 if (!response.ok) {
@@ -1459,9 +1592,8 @@
                 updateChartData(ramChart, metrics, 'ram');
                 updateDiskChart(metrics);
                 updateStatus(metrics);
-                const selectedHostname = hostnameFilter.value;
-                if (selectedHostname) {
-                    fetchHostDetails(selectedHostname);
+                if (effectiveHostname) {
+                    fetchHostDetails(effectiveHostname);
                 } else {
                     hideDetails();
                 }
@@ -1479,9 +1611,20 @@
         });
 
         hostnameFilter.addEventListener('change', () => {
+            if (hostnameFilter.value === AUTO_CYCLE_VALUE) {
+                startAutoCycle();
+                return;
+            }
+
+            stopAutoCycle();
+            if (hostnameFilter.value && knownHosts.has(hostnameFilter.value)) {
+                setCurrentAutoHostname(hostnameFilter.value);
+            }
+
             fetchMetrics();
-            if (hostnameFilter.value) {
-                fetchHostDetails(hostnameFilter.value);
+            const selected = getEffectiveHostname();
+            if (selected) {
+                fetchHostDetails(selected);
             } else {
                 hideDetails();
             }
@@ -1492,7 +1635,12 @@
             timeframeFilter.value = defaultTimeframe;
         }
 
-        fetchMetrics();
+        if (hostnameFilter.value === AUTO_CYCLE_VALUE) {
+            startAutoCycle();
+        } else {
+            fetchMetrics();
+        }
+
         loadHosts();
         setInterval(fetchMetrics, 1000);
     </script>
