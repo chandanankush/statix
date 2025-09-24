@@ -38,13 +38,30 @@ Dockerfile (located in `server/`) installs dependencies and runs `gunicorn`.
 ```sh
 docker build -t monitoring-server server
 
-docker run --rm \ 
-  --name monitoring-server \ 
-  -p 5050:5000 \ 
-  -e DATABASE_PATH=/app/data/metrics.db \ 
-  -v $(pwd)/server/data:/app/data \ 
+docker run --rm \
+  --name monitoring-server \
+  -p 5050:5000 \
+  -e DATABASE_PATH=/app/data/metrics.db \
+  -v $(pwd)/server/data:/app/data \
   monitoring-server
 ```
+### Build & Transfer to Another Docker Host
+```sh
+# Build the image locally
+docker build -t monitoring-server:latest server
+
+# Export it to a tarball for copy/scp to another machine
+docker save monitoring-server:latest -o monitoring-server.tar
+
+# On the target host, load (and optionally re-tag + push)
+docker load -i monitoring-server.tar
+docker tag monitoring-server:latest myregistry.example.com/monitoring-server:latest
+docker push myregistry.example.com/monitoring-server:latest  # optional
+```
+
+> Tip: swap `myregistry.example.com/monitoring-server:latest` with your own registry/namespace. If you use `docker context`
+> to point at a remote engine, you can run the build directly on that host instead of saving/loading.
+
 ### Compose
 `docker-compose.yml` handles build/run and persists data using the `server_data` named volume. Launch with `docker-compose up --build -d`.
 
