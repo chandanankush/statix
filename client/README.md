@@ -137,13 +137,16 @@ Set the required environment variables before running (as shown above). Stop wit
   </plist>
   ```
    Update `USERNAME` (and the Python binary paths) to match the account you deploy under.
+
 2. Load and start:
+
    ```sh
    launchctl load ~/Library/LaunchAgents/com.local.systemstats.forwarder.plist
    launchctl load ~/Library/LaunchAgents/com.local.systemstats.service.plist
    launchctl start com.local.systemstats.forwarder
    launchctl start com.local.systemstats.service
    ```
+
 3. Manage with `launchctl list | grep systemstats`, `launchctl unload …` for both labels, and review logs in `~/Library/Logs/` (`system-stats-forwarder.log` and `system-stats-service.log`).
 
 ## REST API
@@ -159,6 +162,7 @@ Set the required environment variables before running (as shown above). Stop wit
   "system": {"hostname": "chandan-mac-mini.local", "model": "Mac16,11", ...}
 }
 ```
+
 - `GET /health` – `{ "status": "ok" }`.
 
 ## Payload Sent to the Monitoring Server
