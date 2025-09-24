@@ -155,11 +155,20 @@ WantedBy=multi-user.target
 
 ## Raspberry Pi Installation Notes
 
+```sh
+sudo apt update
+sudo apt install python3-pip
+```
+
+```sh python3 -m pip --version ``` should be 23.x or newer
+
 On modern Raspberry Pi OS releases (`/usr/bin/python3` is “externally managed”), use:
 
 ```sh
 python3 -m pip install --break-system-packages .
 ```
+
+
 
 If `pip` complains about stale egg-info permissions, remove the folder first:
 
@@ -171,6 +180,7 @@ python3 -m pip install --break-system-packages .
 You can also wrap the services with systemd using a single command:
 
 ```sh
+
 sudo bash -c '
 cat >/etc/systemd/system/system-stats.service <<EOF
 [Unit]
@@ -180,10 +190,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
+User=ankush
 Environment=SYSTEM_STATS_PORT=5001
 Environment=SYSTEM_STATS_LOG_LEVEL=info
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/ankush/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env system-stats-service
 Restart=on-failure
 RestartSec=5
@@ -202,9 +212,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=MONITORING_SERVER_METRICS_URL=http://192.168.0.139:5050/metrics
+User=ankush
+Environment=PATH=/home/ankush/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=MONITORING_SERVER_METRICS_URL=http://piserver.local:5050/metrics
 Environment=SYSTEM_STATS_URL=http://127.0.0.1:5001/system
 Environment=SYSTEM_STATS_FORWARD_INTERVAL=30
 Environment=SYSTEM_STATS_FORWARD_LOG_LEVEL=info
@@ -219,9 +229,17 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now system-stats.service
-systemctl enable --now system-stats-forwarder.service
+systemctl restart system-stats.service
+systemctl restart system-stats-forwarder.service
 '
+```
+
+check using
+
+```sh
+systemctl status system-stats.service
+systemctl status system-stats-forwarder.service
+curl http://127.0.0.1:5001/health
 ```
 
 Adjust `User`, paths, or URLs as needed (`pi` vs. your username, monitoring server IP, etc.).
