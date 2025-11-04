@@ -1,3 +1,7 @@
+# docker build -f server/Dockerfile -t monitoring-server:latest
+# docker save monitoring-server:latest -o monitoring-server.tar
+# docker run --rm -p 5050:5000 monitoring-server:latest
+
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -9,8 +13,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY server.py /app/server.py
-COPY templates /app/templates
+COPY server/server.py /app/server.py
+COPY server/templates /app/templates
 
 RUN pip install --no-cache-dir flask gunicorn
 

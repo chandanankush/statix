@@ -199,6 +199,19 @@
             font-size: 0.95rem;
         }
 
+        .status-hostlist li {
+            padding: 6px 10px;
+            border-radius: 10px;
+            transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .status-hostlist li.offline-host {
+            background: rgba(255, 196, 135, 0.32);
+            border-color: rgba(251, 146, 60, 0.35);
+            color: #b45309;
+        }
+
         .chart-container {
             max-width: 1080px;
             margin: 0 auto 32px;
@@ -385,6 +398,28 @@
             color: var(--color-stat-foot);
         }
 
+        .details.offline .card {
+            background: linear-gradient(180deg, #fff4e5 0%, #ffe8cc 100%);
+            border-color: rgba(251, 146, 60, 0.45);
+            box-shadow: 0 24px 48px rgba(255, 161, 25, 0.18);
+        }
+
+        body.theme-dark .details.offline .card {
+            background: linear-gradient(180deg, rgba(255, 180, 90, 0.2) 0%, rgba(253, 140, 36, 0.18) 100%);
+            border-color: rgba(249, 115, 22, 0.55);
+            box-shadow: 0 24px 48px rgba(249, 115, 22, 0.35);
+        }
+
+        .details.offline .card-icon {
+            background: linear-gradient(135deg, #ffd7a9 0%, #ffb347 100%);
+            color: #8a4600;
+        }
+
+        body.theme-dark .details.offline .card-icon {
+            background: linear-gradient(135deg, rgba(255, 180, 90, 0.45) 0%, rgba(253, 140, 36, 0.6) 100%);
+            color: #ffedd5;
+        }
+
         .uptime-highlight {
             font-size: 2.1rem;
             font-weight: 700;
@@ -474,6 +509,11 @@
         .host-actions {
             display: flex;
             gap: 10px;
+        }
+
+        .host-card.offline {
+            border-color: rgba(251, 146, 60, 0.6);
+            background: linear-gradient(180deg, rgba(255, 196, 135, 0.22) 0%, rgba(253, 186, 116, 0.22) 100%);
         }
 
         .btn-secondary,
@@ -788,6 +828,14 @@
             memoryUsageBar: document.getElementById('memoryUsageBar'),
             diskUsageBar: document.getElementById('diskUsageBar'),
         };
+
+        const OFFLINE_THRESHOLD_SECONDS = 5 * 60;
+        const HOST_STATUS_REFRESH_INTERVAL_MS = 30000;
+        let hostLastSeenMap = new Map();
+        let lastHostStatusFetchedAt = 0;
+        const offlineHostState = new Map();
+        const notificationSupport = 'Notification' in window;
+        let notificationPermissionAttempted = false;
 
         let lastDetailsHostname = null;
         let lastDetailsUpdatedAt = null;
@@ -1149,6 +1197,108 @@
             return date.toLocaleString();
         }
 
+        function ensureNotificationPermission() {
+            if (!notificationSupport || notificationPermissionAttempted) {
+                return;
+            }
+            notificationPermissionAttempted = true;
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().catch(() => {});
+            }
+        }
+
+        function triggerOfflineNotification(hostname) {
+            if (!notificationSupport) {
+                return;
+            }
+            if (Notification.permission === 'granted') {
+                try {
+                    new Notification('Host offline', {
+                        body: `${hostname} has not sent metrics for the last 5 minutes.`,
+                        tag: `offline-${hostname}`,
+                    });
+                } catch (error) {
+                    console.warn('Failed to dispatch notification', error);
+                }
+                return;
+            }
+            if (Notification.permission === 'default' && !notificationPermissionAttempted) {
+                ensureNotificationPermission();
+                if (Notification.permission === 'granted') {
+                    triggerOfflineNotification(hostname);
+                }
+            }
+        }
+
+        function updateOfflineTracking(hostname, isOffline) {
+            const wasOffline = offlineHostState.get(hostname) === true;
+            if (isOffline && !wasOffline) {
+                offlineHostState.set(hostname, true);
+                triggerOfflineNotification(hostname);
+                return;
+            }
+            if (!isOffline && wasOffline) {
+                offlineHostState.set(hostname, false);
+                return;
+            }
+            offlineHostState.set(hostname, isOffline);
+        }
+
+        function applyOfflineHighlight(selectedHostname, offlineHosts) {
+            Array.from(hostUpdateList.children).forEach(item => {
+                const host = item.dataset.hostname;
+                if (!host) {
+                    return;
+                }
+                if (offlineHosts.has(host)) {
+                    item.classList.add('offline-host');
+                } else {
+                    item.classList.remove('offline-host');
+                }
+            });
+
+            if (selectedHostname && offlineHosts.has(selectedHostname)) {
+                detailsSection.classList.add('offline');
+            } else {
+                detailsSection.classList.remove('offline');
+            }
+        }
+
+        function updateHostStatusCache(hosts) {
+            const map = new Map();
+            hosts.forEach(host => {
+                if (!host || !host.hostname) {
+                    return;
+                }
+                const lastSeen = typeof host.last_seen === 'number' ? host.last_seen : 0;
+                map.set(host.hostname, lastSeen);
+            });
+            hostLastSeenMap = map;
+            lastHostStatusFetchedAt = Date.now();
+        }
+
+        async function refreshHostStatus(force = false) {
+            const now = Date.now();
+            if (!force && now - lastHostStatusFetchedAt < HOST_STATUS_REFRESH_INTERVAL_MS) {
+                return hostLastSeenMap;
+            }
+
+            try {
+                const response = await fetch('/hosts');
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                const payload = await response.json();
+                const hosts = payload.hosts || [];
+                updateHostStatusCache(hosts);
+            } catch (error) {
+                console.error('Failed to refresh host status', error);
+                lastHostStatusFetchedAt = now;
+            }
+
+            return hostLastSeenMap;
+        }
+
         function updateChartData(chart, metrics, field) {
             chart.data.labels = metrics.map(point => formatTimestamp(point.timestamp));
             chart.data.datasets[0].data = metrics.map(point => point[field]);
@@ -1348,6 +1498,7 @@
 
         function hideDetails() {
             detailsSection.classList.add('hidden');
+            detailsSection.classList.remove('offline');
             lastDetailsHostname = null;
             lastDetailsUpdatedAt = null;
         }
@@ -1415,6 +1566,7 @@
                 }
                 const payload = await response.json();
                 const hosts = payload.hosts || [];
+                updateHostStatusCache(hosts);
                 updateHostnameOptions(hosts);
                 renderHostList(hosts);
             } catch (error) {
@@ -1429,6 +1581,7 @@
                 return;
             }
             hostList.innerHTML = '';
+            const nowSeconds = Math.floor(Date.now() / 1000);
             hosts.forEach(host => {
                 const card = document.createElement('div');
                 card.className = 'host-card';
@@ -1437,9 +1590,14 @@
                 meta.className = 'host-meta';
                 const lastSeenText = host.last_seen ? formatTimestamp(host.last_seen) : '—';
                 const detailsUpdated = host.details_updated_at ? formatTimestamp(host.details_updated_at) : '—';
+                const secondsSince = host.last_seen ? nowSeconds - host.last_seen : Number.POSITIVE_INFINITY;
+                const isOffline = secondsSince >= OFFLINE_THRESHOLD_SECONDS;
+                if (isOffline) {
+                    card.classList.add('offline');
+                }
                 meta.innerHTML = `<strong>${host.hostname}</strong>
                     <span>Metrics stored: ${host.metric_count}</span>
-                    <span>Last seen: ${lastSeenText}</span>
+                    <span>Last seen: ${lastSeenText}${isOffline ? ' (offline)' : ''}</span>
                     <span>Details updated: ${detailsUpdated}</span>`;
 
                 const actions = document.createElement('div');
@@ -1541,42 +1699,84 @@
             }
         }
 
-        function updateStatus(metrics) {
-            if (metrics.length === 0) {
-                lastUpdatedText.textContent = 'No data yet';
-                hostUpdateList.innerHTML = '<li>No metrics available</li>';
-                return;
-            }
+        function updateStatus(metrics, hostStatusMap) {
+            const latestByHost = new Map();
 
-            const latestTimestamp = metrics.reduce((max, point) => Math.max(max, point.timestamp), 0);
-            lastUpdatedText.textContent = formatTimestamp(latestTimestamp);
-
-            const latestPerHost = new Map();
             metrics.forEach(point => {
-                const existing = latestPerHost.get(point.hostname);
-                if (!existing || point.timestamp > existing.timestamp) {
-                    latestPerHost.set(point.hostname, point);
+                const existing = latestByHost.get(point.hostname);
+                const timestamp = typeof point.timestamp === 'number' ? point.timestamp : 0;
+                if (!existing || timestamp > existing.timestamp) {
+                    latestByHost.set(point.hostname, { hostname: point.hostname, timestamp });
                 }
             });
 
-            const items = Array.from(latestPerHost.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
+            if (hostStatusMap && typeof hostStatusMap.forEach === 'function') {
+                hostStatusMap.forEach((lastSeen, hostname) => {
+                    const timestamp = typeof lastSeen === 'number' ? lastSeen : 0;
+                    const existing = latestByHost.get(hostname);
+                    if (!existing || timestamp > existing.timestamp) {
+                        latestByHost.set(hostname, { hostname, timestamp });
+                    }
+                });
+            }
+
+            const entries = Array.from(latestByHost.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            const offlineHosts = new Set();
+
+            if (!entries.length) {
+                lastUpdatedText.textContent = 'No data yet';
+                hostUpdateList.innerHTML = '<li>No metrics available</li>';
+                applyOfflineHighlight(getEffectiveHostname(), offlineHosts);
+                return;
+            }
+
             hostUpdateList.innerHTML = '';
-            items.forEach(point => {
+            let latestTimestamp = 0;
+            entries.forEach(entry => {
+                const timestamp = entry.timestamp || 0;
+                if (timestamp > latestTimestamp) {
+                    latestTimestamp = timestamp;
+                }
                 const li = document.createElement('li');
-                li.textContent = `${point.hostname}: ${formatTimestamp(point.timestamp)}`;
+                li.dataset.hostname = entry.hostname;
+                const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
+                li.textContent = timestamp
+                    ? `${entry.hostname}: ${formatTimestamp(timestamp)}`
+                    : `${entry.hostname}: No data yet`;
+                if (isOffline) {
+                    li.textContent += ' (offline)';
+                    offlineHosts.add(entry.hostname);
+                }
                 hostUpdateList.appendChild(li);
+                updateOfflineTracking(entry.hostname, isOffline);
+            });
+
+            lastUpdatedText.textContent = latestTimestamp
+                ? formatTimestamp(latestTimestamp)
+                : 'No data yet';
+
+            applyOfflineHighlight(getEffectiveHostname(), offlineHosts);
+
+            const visibleHosts = new Set(entries.map(entry => entry.hostname));
+            Array.from(offlineHostState.keys()).forEach(hostname => {
+                if (!visibleHosts.has(hostname)) {
+                    offlineHostState.delete(hostname);
+                }
             });
         }
 
         async function fetchMetrics() {
             try {
+                const hostStatusPromise = refreshHostStatus();
                 const autoMode = hostnameFilter.value === AUTO_CYCLE_VALUE;
                 const effectiveHostname = getEffectiveHostname();
                 if (autoMode && !effectiveHostname) {
                     updateChartData(cpuChart, [], 'cpu');
                     updateChartData(ramChart, [], 'ram');
                     updateDiskChart([]);
-                    updateStatus([]);
+                    const hostStatuses = await hostStatusPromise;
+                    updateStatus([], hostStatuses);
                     hideDetails();
                     return;
                 }
@@ -1591,7 +1791,8 @@
                 updateChartData(cpuChart, metrics, 'cpu');
                 updateChartData(ramChart, metrics, 'ram');
                 updateDiskChart(metrics);
-                updateStatus(metrics);
+                const hostStatuses = await hostStatusPromise;
+                updateStatus(metrics, hostStatuses);
                 if (effectiveHostname) {
                     fetchHostDetails(effectiveHostname);
                 } else {
@@ -1633,6 +1834,10 @@
 
         if (timeframeFilter.value === '' && timeframePresets[defaultTimeframe]) {
             timeframeFilter.value = defaultTimeframe;
+        }
+
+        if (notificationSupport) {
+            ensureNotificationPermission();
         }
 
         if (hostnameFilter.value === AUTO_CYCLE_VALUE) {
