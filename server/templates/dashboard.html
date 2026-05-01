@@ -160,17 +160,25 @@
         }
 
         .status {
-            margin: 0 auto 24px;
+            margin: 0 0 24px;
             background: var(--color-panel-bg);
             backdrop-filter: blur(16px);
-            padding: 20px 24px;
+            padding: 16px 24px;
             border-radius: 16px;
             box-shadow: var(--color-card-shadow);
             display: flex;
             flex-direction: column;
-            flex-wrap: wrap;
-            gap: 16px;
+            gap: 10px;
             transition: background 0.4s ease, box-shadow 0.4s ease, color 0.3s ease;
+        }
+
+        .status-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
         }
 
         .status > div {
@@ -559,12 +567,17 @@
 
             .status {
                 flex-direction: row;
-                align-items: flex-start;
-                gap: 24px;
+                align-items: center;
+                gap: 16px 24px;
+            }
+
+            .status > div:first-child {
+                white-space: nowrap;
+                flex-shrink: 0;
             }
 
             .status-hostlist {
-                justify-items: end;
+                flex: 1;
             }
         }
 
@@ -801,6 +814,16 @@
         </div>
     </section>
 
+    <section class="status">
+        <div>
+            <span class="status-label">Last data received:</span>
+            <span id="lastUpdatedText">No data yet</span>
+        </div>
+        <ul id="hostUpdateList" class="status-hostlist">
+            <li>No metrics available</li>
+        </ul>
+    </section>
+
     <section class="details hidden" id="hostDetailsSection">
         <div class="cards-grid">
             <article class="card" data-widget="cpu-info">
@@ -949,16 +972,6 @@
             </div>
         </div>
     </div>
-
-    <section class="status">
-        <div>
-            <span class="status-label">Last data received:</span>
-            <span id="lastUpdatedText">No data yet</span>
-        </div>
-        <ul id="hostUpdateList" class="status-hostlist">
-            <li>No metrics available</li>
-        </ul>
-    </section>
 
     <div class="charts-grid">
         <div class="chart-container" data-widget="chart-cpu">
