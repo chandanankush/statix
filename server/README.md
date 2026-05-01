@@ -1,6 +1,8 @@
 # Statix Server
 
-Flask-based monitoring server that ingests host metrics, persists them in SQLite, and renders a Chart.js dashboard. Published to Docker Hub as [`midnightappcoder/statix`](https://hub.docker.com/r/midnightappcoder/statix) and built for `linux/amd64` and `linux/arm64` (Raspberry Pi).
+Flask-based monitoring server that ingests host metrics, persists them in SQLite, and renders a Chart.js dashboard. Published to Docker Hub as [`midnightappcoder/statix`](https://hub.docker.com/r/midnightappcoder/statix) — built for `linux/amd64` and `linux/arm64` (Raspberry Pi).
+
+**Current release:** `v1.0.1` — `midnightappcoder/statix:1.0.1`
 
 ## One-Line Install
 
@@ -31,7 +33,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/se
 
 ## Docker Compose
 
-If you prefer Compose:
 ```sh
 docker-compose up -d
 ```
@@ -42,7 +43,7 @@ Override the port:
 MONITOR_PORT=8080 docker-compose up -d
 ```
 
-To force a local build instead of pulling from Docker Hub:
+Force a local build instead of pulling from Docker Hub:
 ```sh
 docker-compose up --build -d
 ```
@@ -52,6 +53,7 @@ docker-compose up --build -d
 ## Manual Docker Run
 
 ```sh
+# Latest
 docker run -d \
   --name statix \
   --restart unless-stopped \
@@ -59,53 +61,91 @@ docker run -d \
   -v statix_data:/app/data \
   -e DATABASE_PATH=/app/data/metrics.db \
   midnightappcoder/statix:latest
+
+# Pinned version
+docker run -d \
+  --name statix \
+  --restart unless-stopped \
+  -p 5050:5000 \
+  -v statix_data:/app/data \
+  -e DATABASE_PATH=/app/data/metrics.db \
+  midnightappcoder/statix:1.0.1
 ```
 
 ---
 
 ## Configuration
 
-| Environment Variable | Default | Description |
+All settings are environment variables passed to the container.
+
+### Storage
+
+| Variable | Default | Description |
 |---|---|---|
-| `DATABASE_PATH` | `/app/data/metrics.db` | Path to the SQLite database inside the container. Mount a volume to persist data. |
+| `DATABASE_PATH` | `/app/data/metrics.db` | SQLite database path inside the container. Always mount a volume at `/app/data` to persist data across restarts. |
+
+### Security
+
+| Variable | Default | Description |
+|---|---|---|
+| `STATIX_API_KEY` | *(unset)* | When set, all write/delete endpoints require `Authorization: Bearer <key>`. Leave unset on trusted networks. The dashboard will prompt for the key automatically. |
+| `STATIX_RATE_LIMIT` | `60` | Maximum POST `/metrics` requests per IP per minute before a `429` is returned. |
+| `STATIX_MAX_CONTENT_LENGTH` | `524288` (512 KB) | Maximum accepted request body size in bytes for POST `/metrics`. |
+| `STATIX_MAX_DETAILS_BYTES` | `65536` (64 KB) | Maximum size of the `details` snapshot stored per host. Oversized blobs are dropped with a log warning. |
+
+Example with API key enabled:
+```sh
+docker run -d \
+  --name statix \
+  --restart unless-stopped \
+  -p 5050:5000 \
+  -v statix_data:/app/data \
+  -e DATABASE_PATH=/app/data/metrics.db \
+  -e STATIX_API_KEY=your-secret-key \
+  midnightappcoder/statix:1.0.1
+```
 
 ---
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/metrics` | Ingest a metrics payload from the forwarder. |
-| `GET` | `/data` | Query stored metrics. Params: `hostname`, `timeframe` (`1h`, `24h`, `7d`). |
-| `GET` | `/details` | Latest rich snapshot for a host. Param: `hostname`. |
-| `GET` | `/hosts` | List all known hosts with last-seen timestamps. |
-| `POST` | `/hosts/<hostname>/clean` | Delete metric history for a host (keeps host_details). |
-| `DELETE` | `/hosts/<hostname>` | Remove a host and all its data entirely. |
-| `GET` | `/dashboard` | Chart.js dashboard UI. |
-| `GET` | `/health` | Health check — returns `{"status": "ok"}`. |
+| Method | Endpoint | Auth required | Description |
+|---|---|---|---|
+| `POST` | `/metrics` | No | Ingest a metrics payload from the forwarder. |
+| `GET` | `/data` | No | Query stored metrics. Params: `hostname`, `timeframe` (`1h`, `24h`, `7d`). |
+| `GET` | `/details` | No | Latest rich snapshot for a host. Param: `hostname`. |
+| `GET` | `/hosts` | No | List all known hosts with last-seen timestamps. |
+| `POST` | `/hosts/<hostname>/clean` | **Yes** | Delete metric history for a host (keeps host_details). |
+| `DELETE` | `/hosts/<hostname>` | **Yes** | Remove a host and all its data entirely. |
+| `GET` | `/dashboard` | No | Chart.js dashboard UI. |
+| `GET` | `/health` | No | Health check — returns `{"status": "ok"}`. |
+
+"Auth required" applies only when `STATIX_API_KEY` is set. Pass the token as:
+```
+Authorization: Bearer <your-key>
+```
 
 ---
 
 ## Docker Hub & CI
 
-The image is automatically built and pushed to Docker Hub on every push to `main` that touches `server/**`, via the GitHub Actions workflow at `.github/workflows/docker-publish.yml`.
+The image is automatically built and pushed to Docker Hub on every push to `main` that touches `server/**`, via `.github/workflows/docker-publish.yml`. Images are built for both `linux/amd64` and `linux/arm64`.
 
-Images are tagged:
-- `midnightappcoder/statix:latest` — always points to the most recent `main` build
+Tags:
+- `midnightappcoder/statix:latest` — most recent `main` build
+- `midnightappcoder/statix:1.0.1` — current stable release
 - `midnightappcoder/statix:<git-sha>` — immutable per-commit tag
 
-To pull a specific commit:
+Pull a specific version:
 ```sh
-docker pull midnightappcoder/statix:<sha>
+docker pull midnightappcoder/statix:1.0.1
 ```
 
-### Setting up Docker Hub secrets (one-time, repo owner only)
+### One-time Docker Hub secrets setup (repo owner)
 
-1. Go to **GitHub → Settings → Secrets and variables → Actions**
-2. Add `DOCKERHUB_USERNAME` (your Docker Hub username)
-3. Add `DOCKERHUB_TOKEN` (a Docker Hub Access Token — create one at hub.docker.com → Account Settings → Security)
-
-After that, every push to `main` will automatically publish a new image.
+1. **GitHub → repo → Settings → Secrets and variables → Actions**
+2. Add `DOCKERHUB_USERNAME` = `midnightappcoder`
+3. Add `DOCKERHUB_TOKEN` = Docker Hub access token (hub.docker.com → Account Settings → Security → New Access Token)
 
 ---
 
@@ -124,4 +164,7 @@ docker exec -it statix bash
 
 # Check health
 curl http://127.0.0.1:5050/health
+
+# Backup the database
+docker cp statix:/app/data/metrics.db ./metrics-backup.db
 ```

@@ -9,12 +9,12 @@ The repository now contains three layers:
 These components can run on the same machine for local monitoring or be distributed across multiple hosts.
 
 ## Components
-- **System Stats Service (`client/system_stats/`)** – Installable Python package that relies on `psutil` to collect live host metrics and serves them from `/system`. Includes packaging metadata plus systemd and launchd templates for long-running deployments.
+- **System Stats Service (`client/system_stats/`)** – Installable Python package that relies on `psutil` to collect live host metrics and serves them from `/system`. Includes packaging metadata plus systemd and launchd templates for long-running deployments. Installed via `client/install.sh`.
 - **Forwarder (`system-stats-forwarder`)** – Console script that periodically polls the FastAPI endpoint and forwards condensed metrics (`hostname`, `cpu`, `ram`, `disk`, `timestamp`) alongside the rich snapshot to the monitoring server.
-- **Monitoring Server (`server/`)** – Flask API backed by SQLite. Provides `/metrics` for ingestion, `/details` for host snapshots, `/data` for retrieval, `/dashboard` for visualization, and `/health` for readiness checks. Dockerised for simple hosting.
+- **Monitoring Server (`server/`)** – Flask API backed by SQLite. Provides `/metrics` for ingestion, `/details` for host snapshots, `/data` for retrieval, `/dashboard` for visualization, and `/health` for readiness checks. Published to Docker Hub as `midnightappcoder/statix` and installed via `server/install.sh`.
 - **Dashboard** – Chart.js-powered page rendered from `server/templates/dashboard.html` that polls `/data` and visualises trends across hosts and timeframes while showing live host fact cards.
-- **Storage** – SQLite database persisted at `server/data/metrics.db` (or the path in `DATABASE_PATH`). Docker Compose mounts a named volume so history survives container restarts.
-- **Docker Compose (`docker-compose.yml`)** – Runs the monitoring server container. The client service is now intended to run natively and no longer ships a Docker image.
+- **Storage** – SQLite database persisted at `/app/data/metrics.db` (or the path in `DATABASE_PATH`). Docker Compose mounts the `statix_data` named volume so history survives container restarts.
+- **Docker Compose (`docker-compose.yml`)** – Runs the monitoring server container by pulling `midnightappcoder/statix:latest` from Docker Hub. The client service runs natively on each monitored host.
 
 ## Data Flow
 1. System Stats Service gathers metrics locally with `psutil` and serves them via `GET /system`.
@@ -23,11 +23,11 @@ These components can run on the same machine for local monitoring or be distribu
 4. The dashboard issues `/data?hostname=...&timeframe=...` to visualise historical readings and `/details?hostname=...` to populate the summary cards.
 
 ## Deployment Considerations
-- **System Stats Service** – Install directly on each monitored machine; configure via environment variables or the provided service templates. Logging goes to stdout/stderr for integration with systemd/launchd logs.
-- **Forwarder** – Can share the same process manager (systemd/launchd) as the API or run under cron. Ensure it points to the correct monitoring server URL and poll interval.
-- **Server Persistence** – Keep the `server_data` volume or bind mount to retain history. Regularly back up the SQLite file if metrics are critical.
-- **Security** – Add TLS and authentication in production. Restrict dashboard and API access to trusted networks.
-- **Horizontal Scaling** – Run the FastAPI service and forwarder on as many hosts as needed. Use automation (Ansible, cron jobs, etc.) to deploy the pair across the fleet.
+- **System Stats Service** – Install on each monitored machine with a single `bash <(curl ...)` command (`client/install.sh`). Creates an isolated Python venv, registers launchd (macOS) or systemd (Linux) services, and starts them automatically.
+- **Forwarder** – Installed alongside the service by the same installer. Configured with the monitoring server URL and poll interval at install time; re-run the installer to change settings or upgrade.
+- **Server Persistence** – Keep the `statix_data` Docker volume or bind mount to retain history. Back up `/app/data/metrics.db` regularly if metrics are critical (`docker cp statix:/app/data/metrics.db ./backup.db`).
+- **Security** – Set `STATIX_API_KEY` to protect destructive endpoints (DELETE/clean). Add TLS via a reverse proxy (nginx, Caddy) in front of the container. Restrict dashboard access to trusted networks.
+- **Horizontal Scaling** – Run the FastAPI service and forwarder on as many hosts as needed. All agents point at the single monitoring server. Use automation (Ansible, cron) to deploy across a fleet.
 
 ## Extensibility
 - Extend `system_stats/metrics.py` to capture additional metrics (GPU, temperatures, per-interface network stats) and adjust the forwarder/server schema accordingly.

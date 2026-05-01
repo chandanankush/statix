@@ -1,5 +1,8 @@
 # Monitoring Stack
 
+[![Docker Hub](https://img.shields.io/docker/v/midnightappcoder/statix?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/midnightappcoder/statix)
+[![Latest](https://img.shields.io/badge/version-1.0.1-blue)](https://github.com/chandanankush/statix/releases/tag/v1.0.1)
+
 This project combines a host-native system stats agent with a lightweight monitoring server and dashboard. The agent gathers CPU, memory, disk, network, and uptime information directly from each machine; the server persists readings, serves APIs, and renders a responsive dashboard with trend charts and host summary cards.
 
 ![stats](https://github.com/user-attachments/assets/2e0ffe7d-c37e-4acd-9ea9-997891104216)
@@ -42,7 +45,7 @@ Open `http://YOUR_SERVER:5050/dashboard` and filter by hostname and timeframe to
 
 ## Components
 - **client/** – FastAPI stats service, forwarder, and one-line installer/uninstaller. See `client/README.md`.
-- **server/** – Flask ingestion API, SQLite storage, and Chart.js dashboard. See `server/README.md`.
+- **server/** – Flask ingestion API, SQLite storage, and Chart.js dashboard. Published as `midnightappcoder/statix` on Docker Hub. See `server/README.md`.
 - **ARCHITECTURE.md** – High-level design and data flow.
 - **docker-compose.yml** – Container orchestration for the monitoring server.
 
