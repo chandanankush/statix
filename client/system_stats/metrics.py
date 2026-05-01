@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -57,6 +58,56 @@ def _detect_hardware_model(system_name: str) -> Optional[str]:
     return None
 
 
+def _macos_link_speed_mbps(iface_name: str) -> Optional[float]:
+    """Parse negotiated link speed from `ifconfig <iface>` media line on macOS.
+
+    Examples of media lines:
+      media: autoselect (2500Base-T <full-duplex>)   -> 2500 Mbps
+      media: autoselect (1000baseT <full-duplex>)    -> 1000 Mbps
+      media: autoselect (10GBase-T <full-duplex>)    -> 10000 Mbps
+      media: autoselect                              -> None (WiFi / no link)
+
+    Falls back to `system_profiler SPAirPortDataType` Transmit Rate for Wi-Fi.
+    """
+    try:
+        result = subprocess.run(
+            ["/sbin/ifconfig", iface_name],
+            capture_output=True, text=True, timeout=3,
+        )
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line.startswith("media:"):
+                continue
+            # match e.g. (2500Base-T ...) or (1000baseT ...) or (10GBase-T ...)
+            m = re.search(r"\((\d+(?:\.\d+)?)(G|g)?[Bb]ase", line)
+            if m:
+                speed = float(m.group(1))
+                if m.group(2):  # G suffix -> convert to Mbps
+                    speed *= 1000
+                return speed
+    except Exception:
+        pass
+
+    # Wi-Fi fallback: parse current TX rate from system_profiler
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPAirPortDataType"],
+            capture_output=True, text=True, timeout=10,
+        )
+        current_iface: Optional[str] = None
+        for block in result.stdout.split("\n\n"):
+            m_iface = re.search(r"\b(en\d+):", block)
+            m_rate  = re.search(r"Transmit Rate:\s*(\d+)", block)
+            if m_iface:
+                current_iface = m_iface.group(1)
+            if m_rate and current_iface == iface_name:
+                return float(m_rate.group(1))
+    except Exception:
+        pass
+
+    return None
+
+
 def _primary_network_interface() -> Optional[Dict[str, Any]]:
     stats = psutil.net_if_stats()
     addrs = psutil.net_if_addrs()
@@ -73,12 +124,15 @@ def _primary_network_interface() -> Optional[Dict[str, Any]]:
         inet_info = next((addr for addr in addrs.get(name, []) if addr.family == socket.AF_INET), None)
         if not inet_info:
             continue
+        speed = stat.speed if stat.speed and stat.speed > 0 else None
+        if speed is None and platform.system() == "Darwin":
+            speed = _macos_link_speed_mbps(name)
         return {
             "name": name,
             "ipv4": inet_info.address,
             "netmask": inet_info.netmask,
             "broadcast": getattr(inet_info, "broadcast", None),
-            "speed_mbps": stat.speed if stat.speed and stat.speed > 0 else None,
+            "speed_mbps": speed,
             "mtu": stat.mtu,
             "duplex": duplex_map.get(stat.duplex, "unknown"),
         }
@@ -101,12 +155,15 @@ def _all_network_interfaces() -> List[Dict[str, Any]]:
         inet_info = next((addr for addr in addrs.get(name, []) if addr.family == socket.AF_INET), None)
         if not inet_info:
             continue
+        speed = stat.speed if stat.speed and stat.speed > 0 else None
+        if speed is None and platform.system() == "Darwin":
+            speed = _macos_link_speed_mbps(name)
         interfaces.append({
             "name": name,
             "ipv4": inet_info.address,
             "netmask": inet_info.netmask,
             "broadcast": getattr(inet_info, "broadcast", None),
-            "speed_mbps": stat.speed if stat.speed and stat.speed > 0 else None,
+            "speed_mbps": speed,
             "mtu": stat.mtu,
             "duplex": duplex_map.get(stat.duplex, "unknown"),
         })
