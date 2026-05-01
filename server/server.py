@@ -4,7 +4,9 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 import time
+import urllib.request
 from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -39,6 +41,25 @@ MAX_DETAILS_BYTES: int = int(os.getenv("STATIX_MAX_DETAILS_BYTES", str(64 * 1024
 RATE_LIMIT_REQUESTS: int = int(os.getenv("STATIX_RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW: int = 60  # seconds
 _rate_buckets: Dict[str, List[float]] = {}
+
+# ── data retention ───────────────────────────────────────────────────────────
+# Set STATIX_RETENTION_DAYS to automatically delete metrics older than N days.
+# 0 disables purging (keep forever).
+RETENTION_DAYS: int = int(os.getenv("STATIX_RETENTION_DAYS", "30"))
+
+# ── host online/offline threshold ─────────────────────────────────────────────
+# A host is considered offline when its last metric is older than this many seconds.
+OFFLINE_THRESHOLD_SECONDS: int = int(os.getenv("STATIX_OFFLINE_THRESHOLD", "300"))
+
+# ── alert thresholds (webhook) ────────────────────────────────────────────────
+# Set STATIX_ALERT_WEBHOOK_URL to a URL that will receive a POST when a threshold
+# is breached. Leave unset to disable alerting entirely.
+ALERT_WEBHOOK_URL: Optional[str] = os.getenv("STATIX_ALERT_WEBHOOK_URL") or None
+ALERT_CPU_THRESHOLD: float = float(os.getenv("STATIX_ALERT_CPU_THRESHOLD", "0"))
+ALERT_RAM_THRESHOLD: float = float(os.getenv("STATIX_ALERT_RAM_THRESHOLD", "0"))
+# Minimum seconds between repeated alerts for the same host + metric.
+ALERT_COOLDOWN_SECONDS: int = int(os.getenv("STATIX_ALERT_COOLDOWN", "300"))
+_alert_cooldowns: Dict[str, float] = {}
 
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
@@ -92,7 +113,9 @@ def ensure_database() -> None:
                 ram REAL NOT NULL,
                 disk REAL NOT NULL,
                 disk_read REAL DEFAULT 0,
-                disk_write REAL DEFAULT 0
+                disk_write REAL DEFAULT 0,
+                net_read REAL DEFAULT 0,
+                net_write REAL DEFAULT 0
             )
             """
         )
@@ -110,7 +133,34 @@ def ensure_database() -> None:
         )
         _ensure_column(conn, "metrics", "disk_read", "REAL DEFAULT 0")
         _ensure_column(conn, "metrics", "disk_write", "REAL DEFAULT 0")
+        _ensure_column(conn, "metrics", "net_read", "REAL DEFAULT 0")
+        _ensure_column(conn, "metrics", "net_write", "REAL DEFAULT 0")
         conn.commit()
+
+    # Start background retention thread (daemon — exits cleanly with gunicorn).
+    if RETENTION_DAYS > 0:
+        t = threading.Thread(target=_retention_loop, name="retention", daemon=True)
+        t.start()
+        logging.info("Retention thread started: purging metrics older than %d days", RETENTION_DAYS)
+
+
+def _retention_loop() -> None:
+    """Background thread: purge metrics rows older than RETENTION_DAYS once per hour."""
+    while True:
+        time.sleep(3600)
+        _purge_old_metrics()
+
+
+def _purge_old_metrics() -> None:
+    """Delete metrics rows older than RETENTION_DAYS. No-op when RETENTION_DAYS is 0."""
+    if RETENTION_DAYS <= 0:
+        return
+    cutoff = int(time.time()) - RETENTION_DAYS * 86400
+    with closing(open_connection()) as conn:
+        cursor = conn.execute("DELETE FROM metrics WHERE timestamp < ?", (cutoff,))
+        conn.commit()
+    if cursor.rowcount:
+        logging.info("Retention: purged %d metric rows older than %d days", cursor.rowcount, RETENTION_DAYS)
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -130,8 +180,8 @@ def insert_metric(payload: Dict[str, float]) -> None:
     with closing(open_connection()) as conn:
         conn.execute(
             """
-            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["timestamp"],
@@ -141,6 +191,8 @@ def insert_metric(payload: Dict[str, float]) -> None:
                 payload["disk"],
                 payload.get("disk_read", 0.0),
                 payload.get("disk_write", 0.0),
+                payload.get("net_read", 0.0),
+                payload.get("net_write", 0.0),
             ),
         )
         conn.commit()
@@ -167,6 +219,7 @@ def upsert_host_details(hostname: str, details: Dict[str, Any]) -> None:
 
 
 def list_hosts() -> List[Dict[str, Any]]:
+    now = int(time.time())
     summaries: Dict[str, Dict[str, Any]] = {}
     with closing(open_connection()) as conn:
         for row in conn.execute(
@@ -181,6 +234,7 @@ def list_hosts() -> List[Dict[str, Any]]:
                 "metric_count": row["metric_count"],
                 "last_seen": row["last_seen"],
                 "details_updated_at": None,
+                "online": (now - row["last_seen"]) < OFFLINE_THRESHOLD_SECONDS if row["last_seen"] else False,
             }
 
         for row in conn.execute(
@@ -197,6 +251,7 @@ def list_hosts() -> List[Dict[str, Any]]:
             )
             summary["details_updated_at"] = row["updated_at"]
             summary["last_seen"] = max(summary.get("last_seen") or 0, row["updated_at"])
+            summary["online"] = (now - summary["last_seen"]) < OFFLINE_THRESHOLD_SECONDS
 
     return sorted(summaries.values(), key=lambda item: item["hostname"].lower())
 
@@ -223,7 +278,7 @@ def delete_host(hostname: str) -> Dict[str, int]:
 
 
 def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable[sqlite3.Row]:
-    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write FROM metrics"
+    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write FROM metrics"
     params = []
     conditions = []
 
@@ -277,6 +332,35 @@ def get_host_details(hostname: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def _maybe_send_alert(hostname: str, metric: str, value: float, threshold: float) -> None:
+    """POST an alert to ALERT_WEBHOOK_URL when a threshold is breached, with cooldown."""
+    key = f"{hostname}:{metric}"
+    now = time.time()
+    last_sent = _alert_cooldowns.get(key, 0.0)
+    if now - last_sent < ALERT_COOLDOWN_SECONDS:
+        return
+    _alert_cooldowns[key] = now
+    body = json.dumps({
+        "hostname": hostname,
+        "metric": metric,
+        "value": round(value, 2),
+        "threshold": threshold,
+        "timestamp": int(now),
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            ALERT_WEBHOOK_URL or "",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as _resp:  # noqa: S310
+            pass
+        logging.info("Alert sent: %s %s=%.1f >= %.1f", hostname, metric, value, threshold)
+    except Exception:
+        logging.warning("Alert webhook delivery failed for %s %s", hostname, metric)
+
+
 @app.route("/metrics", methods=["POST"])
 @_rate_limit
 def receive_metrics():
@@ -302,6 +386,8 @@ def receive_metrics():
             "timestamp": timestamp,
             "disk_read": float(payload.get("disk_read", 0.0)),
             "disk_write": float(payload.get("disk_write", 0.0)),
+            "net_read": float(payload.get("net_read", 0.0)),
+            "net_write": float(payload.get("net_write", 0.0)),
         }
     except (TypeError, ValueError):
         logging.warning("Invalid metric payload from %s: bad field types", request.remote_addr)
@@ -312,6 +398,13 @@ def receive_metrics():
     details = payload.get("details")
     if isinstance(details, dict):
         upsert_host_details(metric["hostname"], details)
+
+    # ── alert checks ─────────────────────────────────────────────────────────
+    if ALERT_WEBHOOK_URL:
+        if ALERT_CPU_THRESHOLD > 0 and metric["cpu"] >= ALERT_CPU_THRESHOLD:
+            _maybe_send_alert(hostname, "cpu", metric["cpu"], ALERT_CPU_THRESHOLD)
+        if ALERT_RAM_THRESHOLD > 0 and metric["ram"] >= ALERT_RAM_THRESHOLD:
+            _maybe_send_alert(hostname, "ram", metric["ram"], ALERT_RAM_THRESHOLD)
 
     return jsonify({"status": "ok"})
 
@@ -334,6 +427,8 @@ def data_endpoint():
             "disk": row["disk"],
             "disk_read": row["disk_read"],
             "disk_write": row["disk_write"],
+            "net_read": row["net_read"],
+            "net_write": row["net_write"],
         }
         for row in rows
     ]

@@ -667,6 +667,27 @@
         body.theme-dark .docker-state-running { background: rgba(52,  211, 153, 0.25); color: #34d399; }
         body.theme-dark .docker-state-exited  { background: rgba(248, 113, 113, 0.25); color: #f87171; }
         body.theme-dark .docker-state-paused  { background: rgba(251, 191,  36, 0.25); color: #fbbf24; }
+
+        /* host status dot indicators */
+        .dot-online  { color: #22c55e; margin-right: 6px; }
+        .dot-offline { color: #f97316; margin-right: 6px; }
+
+        /* compare host multi-select */
+        #compareHostFilter {
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--color-input-border);
+            background: var(--color-input-bg);
+            color: var(--color-text);
+            box-shadow: 0 6px 12px var(--color-input-shadow);
+            width: 100%;
+            transition: background 0.4s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+        #compareHostFilter:focus {
+            outline: none;
+            border-color: var(--color-input-focus-border);
+            box-shadow: 0 0 0 3px var(--color-input-focus-ring);
+        }
     </style>
 </head>
 <body class="theme-light">
@@ -683,6 +704,11 @@
                 {% for host in hostnames %}
                 <option value="{{ host }}">{{ host }}</option>
                 {% endfor %}
+            </select>
+        </div>
+        <div class="filter-control" id="compareFilterControl" style="display:none">
+            <label for="compareHostFilter">Compare with</label>
+            <select id="compareHostFilter" multiple size="3">
             </select>
         </div>
         <div class="filter-control">
@@ -850,8 +876,12 @@
         <canvas id="ramChart"></canvas>
     </div>
     <div class="chart-container">
-        <h2>Disk Usage (%)</h2>
+        <h2>Disk I/O (MB/s)</h2>
         <canvas id="diskChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h2>Network I/O (MB/s)</h2>
+        <canvas id="netChart"></canvas>
     </div>
 
     <script>
@@ -1259,7 +1289,81 @@
         });
 
         charts.push(cpuChart, ramChart, diskChart);
+
+        // ── Net I/O chart ────────────────────────────────────────────────────
+        const netChart = new Chart(document.getElementById('netChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Net In (MB/s)',
+                        data: [],
+                        fill: false,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                        tension: 0.25,
+                    },
+                    {
+                        label: 'Net Out (MB/s)',
+                        data: [],
+                        fill: false,
+                        borderColor: '#ec4899',
+                        backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                        tension: 0.25,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'nearest', intersect: false },
+                plugins: {
+                    legend: { labels: { color: currentChartStyles.text } },
+                    tooltip: {
+                        backgroundColor: currentChartStyles.tooltipBg,
+                        titleColor: currentChartStyles.tooltipText,
+                        bodyColor: currentChartStyles.tooltipText,
+                        borderColor: currentChartStyles.grid,
+                        borderWidth: 1,
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: { autoSkip: true, maxTicksLimit: 10, color: currentChartStyles.text },
+                        grid: { color: currentChartStyles.grid },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { callback: (v) => `${v} MB/s`, color: currentChartStyles.text },
+                        grid: { color: currentChartStyles.grid },
+                    },
+                },
+            },
+        });
+        charts.push(netChart);
         refreshChartTheme();
+
+        // ── Compare host palette & controls ──────────────────────────────────
+        const COMPARE_PALETTE = ['#a855f7', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16'];
+        const compareHostFilter = document.getElementById('compareHostFilter');
+        const compareFilterControl = document.getElementById('compareFilterControl');
+
+        function populateCompareFilter(primaryHostname) {
+            if (!compareHostFilter) return;
+            compareHostFilter.innerHTML = '';
+            Array.from(knownHosts).filter(h => h !== primaryHostname).forEach(h => {
+                const opt = document.createElement('option');
+                opt.value = h;
+                opt.textContent = h;
+                compareHostFilter.appendChild(opt);
+            });
+        }
+
+        function getCompareHostnames() {
+            if (!compareHostFilter) return [];
+            return Array.from(compareHostFilter.selectedOptions).map(o => o.value);
+        }
 
         function buildQueryParams() {
             const params = new URLSearchParams();
@@ -1404,6 +1508,14 @@
             diskChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.disk_read));
             diskChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.disk_write));
             diskChart.update('none');
+        }
+
+        function updateNetChart(metrics) {
+            const labels = metrics.map(point => formatTimestamp(point.timestamp));
+            netChart.data.labels = labels;
+            netChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.net_read));
+            netChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.net_write));
+            netChart.update('none');
         }
 
         function setDetailField(key, value) {
@@ -1909,11 +2021,23 @@
                 const li = document.createElement('li');
                 li.dataset.hostname = entry.hostname;
                 const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
-                li.textContent = timestamp
-                    ? `${entry.hostname}: ${formatTimestamp(timestamp)}`
-                    : `${entry.hostname}: No data yet`;
+
+                // coloured dot indicator
+                const dot = document.createElement('span');
+                dot.className = isOffline ? 'dot-offline' : 'dot-online';
+                dot.textContent = '●';
+                dot.setAttribute('aria-hidden', 'true');
+                li.appendChild(dot);
+
+                const text = document.createTextNode(
+                    timestamp
+                        ? `${entry.hostname}: ${formatTimestamp(timestamp)}`
+                        : `${entry.hostname}: No data yet`
+                );
+                li.appendChild(text);
                 if (isOffline) {
-                    li.textContent += ' (offline)';
+                    const offlineNote = document.createTextNode(' (offline)');
+                    li.appendChild(offlineNote);
                     offlineHosts.add(entry.hostname);
                 }
                 hostUpdateList.appendChild(li);
@@ -1939,10 +2063,17 @@
                 const hostStatusPromise = refreshHostStatus();
                 const autoMode = hostnameFilter.value === AUTO_CYCLE_VALUE;
                 const effectiveHostname = getEffectiveHostname();
+
+                // Show/hide compare filter (only in single-host mode)
+                if (compareFilterControl) {
+                    compareFilterControl.style.display = (!autoMode && effectiveHostname) ? '' : 'none';
+                }
+
                 if (autoMode && !effectiveHostname) {
                     updateChartData(cpuChart, [], 'cpu');
                     updateChartData(ramChart, [], 'ram');
                     updateDiskChart([]);
+                    updateNetChart([]);
                     const hostStatuses = await hostStatusPromise;
                     updateStatus([], hostStatuses);
                     hideDetails();
@@ -1956,9 +2087,65 @@
                 }
                 const payload = await response.json();
                 const metrics = payload.data || [];
-                updateChartData(cpuChart, metrics, 'cpu');
-                updateChartData(ramChart, metrics, 'ram');
+
+                // ── primary host datasets ──────────────────────────────────
+                const timeframe = timeframeFilter.value;
+                const labels = metrics.map(point => formatTimestamp(point.timestamp));
+
+                cpuChart.data.labels = labels;
+                cpuChart.data.datasets = [{
+                    label: `CPU % (${effectiveHostname || 'primary'})`,
+                    data: metrics.map(p => p.cpu),
+                    fill: false, borderColor: '#ff6384',
+                    backgroundColor: 'rgba(255,99,132,0.2)', tension: 0.25,
+                }];
+
+                ramChart.data.labels = labels;
+                ramChart.data.datasets = [{
+                    label: `RAM % (${effectiveHostname || 'primary'})`,
+                    data: metrics.map(p => p.ram),
+                    fill: false, borderColor: '#36a2eb',
+                    backgroundColor: 'rgba(54,162,235,0.2)', tension: 0.25,
+                }];
+
+                // ── compare host overlays (CPU + RAM only) ─────────────────
+                const compareHostnames = (!autoMode && effectiveHostname) ? getCompareHostnames() : [];
+                if (compareHostnames.length > 0) {
+                    const compareParams = new URLSearchParams();
+                    if (timeframe) compareParams.append('timeframe', timeframe);
+
+                    await Promise.all(compareHostnames.map(async (cHost, idx) => {
+                        const p = new URLSearchParams(compareParams);
+                        p.append('hostname', cHost);
+                        try {
+                            const resp = await fetch(`/data?${p.toString()}`);
+                            if (!resp.ok) return;
+                            const cPayload = await resp.json();
+                            const cMetrics = cPayload.data || [];
+                            const colour = COMPARE_PALETTE[idx % COMPARE_PALETTE.length];
+                            cpuChart.data.datasets.push({
+                                label: `CPU % (${cHost})`,
+                                data: cMetrics.map(p => ({ x: formatTimestamp(p.timestamp), y: p.cpu })),
+                                fill: false, borderColor: colour,
+                                backgroundColor: colour + '33', tension: 0.25,
+                                parsing: false,
+                            });
+                            ramChart.data.datasets.push({
+                                label: `RAM % (${cHost})`,
+                                data: cMetrics.map(p => ({ x: formatTimestamp(p.timestamp), y: p.ram })),
+                                fill: false, borderColor: colour,
+                                backgroundColor: colour + '33', tension: 0.25,
+                                parsing: false,
+                            });
+                        } catch (_) { /* individual host fetch failure is non-fatal */ }
+                    }));
+                }
+
+                cpuChart.update('none');
+                ramChart.update('none');
                 updateDiskChart(metrics);
+                updateNetChart(metrics);
+
                 const hostStatuses = await hostStatusPromise;
                 updateStatus(metrics, hostStatuses);
                 if (effectiveHostname) {
@@ -1982,6 +2169,7 @@
         hostnameFilter.addEventListener('change', () => {
             if (hostnameFilter.value === AUTO_CYCLE_VALUE) {
                 startAutoCycle();
+                if (compareFilterControl) compareFilterControl.style.display = 'none';
                 return;
             }
 
@@ -1989,6 +2177,8 @@
             if (hostnameFilter.value && knownHosts.has(hostnameFilter.value)) {
                 setCurrentAutoHostname(hostnameFilter.value);
             }
+
+            populateCompareFilter(hostnameFilter.value);
 
             fetchMetrics();
             const selected = getEffectiveHostname();
@@ -1999,6 +2189,9 @@
             }
         });
         timeframeFilter.addEventListener('change', fetchMetrics);
+        if (compareHostFilter) {
+            compareHostFilter.addEventListener('change', fetchMetrics);
+        }
 
         if (timeframeFilter.value === '' && timeframePresets[defaultTimeframe]) {
             timeframeFilter.value = defaultTimeframe;

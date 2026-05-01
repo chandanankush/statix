@@ -93,6 +93,32 @@ All settings are environment variables passed to the container.
 | `STATIX_MAX_CONTENT_LENGTH` | `524288` (512 KB) | Maximum accepted request body size in bytes for POST `/metrics`. |
 | `STATIX_MAX_DETAILS_BYTES` | `65536` (64 KB) | Maximum size of the `details` snapshot stored per host. Oversized blobs are dropped with a log warning. |
 
+### Data retention
+
+| Variable | Default | Description |
+|---|---|---|
+| `STATIX_RETENTION_DAYS` | `30` | Delete metric rows older than this many days. A background thread runs hourly. Set to `0` to keep data forever. |
+
+### Host status
+
+| Variable | Default | Description |
+|---|---|---|
+| `STATIX_OFFLINE_THRESHOLD` | `300` | Seconds since the last metric before a host is considered offline in `GET /hosts`. Must match the dashboard's expectation (default 5 min). |
+
+### Alerting (optional)
+
+| Variable | Default | Description |
+|---|---|---|
+| `STATIX_ALERT_WEBHOOK_URL` | *(unset)* | URL to POST a JSON alert payload to when a threshold is breached. Leave unset to disable alerting. |
+| `STATIX_ALERT_CPU_THRESHOLD` | `0` (disabled) | CPU % at or above which an alert fires. `0` disables CPU alerts. |
+| `STATIX_ALERT_RAM_THRESHOLD` | `0` (disabled) | RAM % at or above which an alert fires. `0` disables RAM alerts. |
+| `STATIX_ALERT_COOLDOWN` | `300` | Minimum seconds between repeated alerts for the same host + metric. |
+
+Alert payload sent to the webhook:
+```json
+{"hostname": "my-host", "metric": "cpu", "value": 95.2, "threshold": 90.0, "timestamp": 1746092624}
+```
+
 Example with API key enabled:
 ```sh
 docker run -d \
