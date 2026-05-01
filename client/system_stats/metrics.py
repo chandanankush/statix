@@ -85,6 +85,34 @@ def _primary_network_interface() -> Optional[Dict[str, Any]]:
     return None
 
 
+def _all_network_interfaces() -> List[Dict[str, Any]]:
+    """Return all active (up, non-loopback) interfaces that have an IPv4 address."""
+    stats = psutil.net_if_stats()
+    addrs = psutil.net_if_addrs()
+    duplex_map = {
+        getattr(psutil, "NIC_DUPLEX_FULL", 2): "full",
+        getattr(psutil, "NIC_DUPLEX_HALF", 1): "half",
+        getattr(psutil, "NIC_DUPLEX_UNKNOWN", 0): "unknown",
+    }
+    interfaces: List[Dict[str, Any]] = []
+    for name, stat in stats.items():
+        if not stat.isup or name.lower().startswith("lo"):
+            continue
+        inet_info = next((addr for addr in addrs.get(name, []) if addr.family == socket.AF_INET), None)
+        if not inet_info:
+            continue
+        interfaces.append({
+            "name": name,
+            "ipv4": inet_info.address,
+            "netmask": inet_info.netmask,
+            "broadcast": getattr(inet_info, "broadcast", None),
+            "speed_mbps": stat.speed if stat.speed and stat.speed > 0 else None,
+            "mtu": stat.mtu,
+            "duplex": duplex_map.get(stat.duplex, "unknown"),
+        })
+    return interfaces
+
+
 def _resolve_root_path() -> Path:
     root = os.getenv("SYSTEM_STATS_DISK_PATH")
     if root:
@@ -282,6 +310,7 @@ def collect_system_metrics() -> Dict[str, Any]:
 
     net_io = _as_dict(psutil.net_io_counters())
     primary_interface = _primary_network_interface()
+    all_interfaces = _all_network_interfaces()
 
     boot_timestamp = psutil.boot_time()
     boot_time = dt.datetime.fromtimestamp(boot_timestamp, tz=dt.timezone.utc).astimezone()
@@ -308,6 +337,7 @@ def collect_system_metrics() -> Dict[str, Any]:
         "network": {
             "io_counters": net_io,
             "primary_interface": primary_interface,
+            "interfaces": all_interfaces,
         },
         "uptime": {
             "seconds": uptime_seconds,

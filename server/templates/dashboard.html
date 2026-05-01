@@ -663,6 +663,11 @@
             gap: 12px;
         }
 
+        .network-iface-separator {
+            border-top: 1px solid var(--color-card-border);
+            margin: 10px 0;
+        }
+
         .docker-container-info {
             min-width: 0;
         }
@@ -966,12 +971,7 @@
                     <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
-                    <div class="stat-grid">
-                        <div class="stat-row"><span class="stat-label">Interface</span><span class="stat-value" id="networkInterface">—</span></div>
-                        <div class="stat-row"><span class="stat-label">IPv4 Address</span><span class="stat-value emphasis" id="networkIPv4">—</span></div>
-                        <div class="stat-row"><span class="stat-label">Link Speed</span><span class="stat-value" id="networkSpeed">—</span></div>
-                        <div class="stat-row"><span class="stat-label">MTU</span><span class="stat-value" id="networkMtu">—</span></div>
-                    </div>
+                    <div id="networkInterfaceList"></div>
                 </div>
             </article>
 
@@ -1113,10 +1113,7 @@
             systemPlatform: document.getElementById('systemPlatform'),
             systemModel: document.getElementById('systemModel'),
             systemOsUpdate: document.getElementById('systemOsUpdate'),
-            networkInterface: document.getElementById('networkInterface'),
-            networkIPv4: document.getElementById('networkIPv4'),
-            networkSpeed: document.getElementById('networkSpeed'),
-            networkMtu: document.getElementById('networkMtu'),
+            networkInterfaceList: document.getElementById('networkInterfaceList'),
             uptimeHuman: document.getElementById('uptimeHuman'),
             uptimeBoot: document.getElementById('uptimeBoot'),
             dockerStatus: document.getElementById('dockerStatus'),
@@ -1947,11 +1944,53 @@
                 osUpdateEl.appendChild(badge);
             }
 
-            const network = (details.network && details.network.primary_interface) || null;
-            setDetailField('networkInterface', network && network.name ? network.name : '—');
-            setDetailField('networkIPv4', network && network.ipv4 ? network.ipv4 : '—');
-            setDetailField('networkSpeed', network ? formatSpeedMbps(network.speed_mbps) : '—');
-            setDetailField('networkMtu', network && typeof network.mtu === 'number' ? network.mtu : '—');
+            // Network interfaces (all active)
+            const networkListEl = detailElements.networkInterfaceList;
+            if (networkListEl) {
+                while (networkListEl.firstChild) networkListEl.removeChild(networkListEl.firstChild);
+                const ifaces = (details.network && details.network.interfaces) || [];
+                if (ifaces.length === 0) {
+                    // Fallback: old payload only had primary_interface
+                    const pi = (details.network && details.network.primary_interface) || null;
+                    if (pi) ifaces.push(pi);
+                }
+                if (ifaces.length === 0) {
+                    const row = document.createElement('div');
+                    row.className = 'stat-row';
+                    const lbl = document.createElement('span'); lbl.className = 'stat-label'; lbl.textContent = 'Status';
+                    const val = document.createElement('span'); val.className = 'stat-value'; val.textContent = 'No active interface';
+                    row.appendChild(lbl); row.appendChild(val);
+                    networkListEl.appendChild(row);
+                } else {
+                    ifaces.forEach((iface, idx) => {
+                        if (idx > 0) {
+                            const sep = document.createElement('div');
+                            sep.className = 'network-iface-separator';
+                            networkListEl.appendChild(sep);
+                        }
+                        const grid = document.createElement('div');
+                        grid.className = 'stat-grid';
+
+                        const makeRow = (label, value, cls) => {
+                            const row = document.createElement('div'); row.className = 'stat-row';
+                            const l = document.createElement('span'); l.className = 'stat-label'; l.textContent = label;
+                            const v = document.createElement('span'); v.className = cls || 'stat-value'; v.textContent = value;
+                            row.appendChild(l); row.appendChild(v);
+                            return row;
+                        };
+
+                        grid.appendChild(makeRow('Interface', iface.name || '—'));
+                        grid.appendChild(makeRow('IPv4 Address', iface.ipv4 || '—', 'stat-value emphasis'));
+                        const speedText = typeof iface.speed_mbps === 'number'
+                            ? formatSpeedMbps(iface.speed_mbps)
+                            : 'Not reported';
+                        grid.appendChild(makeRow('Link Speed', speedText));
+                        grid.appendChild(makeRow('MTU', typeof iface.mtu === 'number' ? String(iface.mtu) : '—'));
+
+                        networkListEl.appendChild(grid);
+                    });
+                }
+            }
 
             const uptime = details.uptime || {};
             setDetailField('uptimeHuman', uptime.human || '—');
@@ -1970,10 +2009,9 @@
             // Disk ≥ 85%
             setCardState('storage', diskPercent !== null && diskPercent >= 85 ? 'card-warn' : null);
 
-            // Network — warn if data present but IPv4 is missing
-            const hasNetworkData = !!(network && network.name);
-            const hasIPv4 = !!(network && network.ipv4);
-            setCardState('network', hasNetworkData && !hasIPv4 ? 'card-warn' : null);
+            // Network — warn if no active interfaces found
+            const activeIfaces = (details.network && details.network.interfaces) || [];
+            setCardState('network', activeIfaces.length === 0 ? 'card-warn' : null);
 
             // Uptime — warn if < 1 h (recent reboot), alert if > 25 days (needs restart)
             const uptimeSeconds = uptime.boot_time ? (Date.now() / 1000 - uptime.boot_time) : null;
