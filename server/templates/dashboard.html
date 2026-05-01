@@ -819,9 +819,7 @@
             <span class="status-label">Last data received:</span>
             <span id="lastUpdatedText">No data yet</span>
         </div>
-        <ul id="hostUpdateList" class="status-hostlist">
-            <li>No metrics available</li>
-        </ul>
+        <ul id="hostUpdateList" class="status-hostlist" style="display:none"></ul>
     </section>
 
     <section class="details hidden" id="hostDetailsSection">
@@ -2084,102 +2082,37 @@
         }
 
         function updateStatus(metrics, hostStatusMap) {
-            const latestByHost = new Map();
-
-            metrics.forEach(point => {
-                const existing = latestByHost.get(point.hostname);
-                const timestamp = typeof point.timestamp === 'number' ? point.timestamp : 0;
-                if (!existing || timestamp > existing.timestamp) {
-                    latestByHost.set(point.hostname, { hostname: point.hostname, timestamp });
-                }
-            });
-
-            if (hostStatusMap && typeof hostStatusMap.forEach === 'function') {
-                hostStatusMap.forEach((lastSeen, hostname) => {
-                    const timestamp = typeof lastSeen === 'number' ? lastSeen : 0;
-                    const existing = latestByHost.get(hostname);
-                    if (!existing || timestamp > existing.timestamp) {
-                        latestByHost.set(hostname, { hostname, timestamp });
-                    }
-                });
-            }
-
-            const autoMode = hostnameFilter.value === AUTO_CYCLE_VALUE;
             const effectiveHostname = getEffectiveHostname();
             const nowSeconds = Math.floor(Date.now() / 1000);
             const offlineHosts = new Set();
 
-            // Single-host mode: just show the timestamp inline, hide the host list
-            if (!autoMode && effectiveHostname) {
-                hostUpdateList.style.display = 'none';
-                const entry = latestByHost.get(effectiveHostname);
-                const timestamp = entry ? (entry.timestamp || 0) : 0;
-                const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
-                if (timestamp) {
-                    lastUpdatedText.textContent = formatTimestamp(timestamp);
-                } else {
-                    lastUpdatedText.textContent = 'No data yet';
-                }
-                if (isOffline && timestamp) offlineHosts.add(effectiveHostname);
-                if (entry) updateOfflineTracking(effectiveHostname, isOffline);
-                applyOfflineHighlight(effectiveHostname, offlineHosts);
-                return;
-            }
+            hostUpdateList.style.display = 'none';
 
-            // Auto-cycle mode: show all hosts in the list
-            hostUpdateList.style.display = '';
-            const entries = Array.from(latestByHost.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
-
-            if (!entries.length) {
+            if (!effectiveHostname) {
                 lastUpdatedText.textContent = 'No data yet';
-                hostUpdateList.innerHTML = '<li>No metrics available</li>';
-                applyOfflineHighlight(effectiveHostname, offlineHosts);
+                applyOfflineHighlight(null, offlineHosts);
                 return;
             }
 
-            hostUpdateList.innerHTML = '';
-            let latestTimestamp = 0;
-            entries.forEach(entry => {
-                const timestamp = entry.timestamp || 0;
-                if (timestamp > latestTimestamp) {
-                    latestTimestamp = timestamp;
-                }
-                const li = document.createElement('li');
-                li.dataset.hostname = entry.hostname;
-                const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
-
-                const dot = document.createElement('span');
-                dot.className = isOffline ? 'dot-offline' : 'dot-online';
-                dot.textContent = '●';
-                dot.setAttribute('aria-hidden', 'true');
-                li.appendChild(dot);
-
-                const text = document.createTextNode(
-                    timestamp
-                        ? `${entry.hostname}: ${formatTimestamp(timestamp)}`
-                        : `${entry.hostname}: No data yet`
-                );
-                li.appendChild(text);
-                if (isOffline) {
-                    li.appendChild(document.createTextNode(' (offline)'));
-                    offlineHosts.add(entry.hostname);
-                }
-                hostUpdateList.appendChild(li);
-                updateOfflineTracking(entry.hostname, isOffline);
-            });
-
-            lastUpdatedText.textContent = latestTimestamp
-                ? formatTimestamp(latestTimestamp)
-                : 'No data yet';
-
-            applyOfflineHighlight(getEffectiveHostname(), offlineHosts);
-
-            const visibleHosts = new Set(entries.map(entry => entry.hostname));
-            Array.from(offlineHostState.keys()).forEach(hostname => {
-                if (!visibleHosts.has(hostname)) {
-                    offlineHostState.delete(hostname);
+            // Find the latest timestamp for the current host from metrics first,
+            // then fall back to hostStatusMap (last-seen from /hosts API)
+            let timestamp = 0;
+            metrics.forEach(point => {
+                if (point.hostname === effectiveHostname) {
+                    const t = typeof point.timestamp === 'number' ? point.timestamp : 0;
+                    if (t > timestamp) timestamp = t;
                 }
             });
+            if (!timestamp && hostStatusMap) {
+                const seen = hostStatusMap.get(effectiveHostname);
+                if (typeof seen === 'number') timestamp = seen;
+            }
+
+            const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
+            lastUpdatedText.textContent = timestamp ? formatTimestamp(timestamp) : 'No data yet';
+            if (isOffline && timestamp) offlineHosts.add(effectiveHostname);
+            updateOfflineTracking(effectiveHostname, isOffline);
+            applyOfflineHighlight(effectiveHostname, offlineHosts);
         }
 
         async function fetchMetrics() {
