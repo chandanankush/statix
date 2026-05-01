@@ -213,7 +213,8 @@ def _resolve_root_path() -> Path:
 
 
 _DOCKER_FALLBACK_PATHS = (
-    "/usr/local/bin/docker",           # Docker Desktop on macOS (Intel / Rosetta)
+    "/usr/bin/docker",                 # Debian / Raspberry Pi OS (apt install docker.io)
+    "/usr/local/bin/docker",           # Docker Desktop on macOS (Intel / Rosetta) or docker-ce
     "/opt/homebrew/bin/docker",        # Homebrew docker on Apple Silicon
     "/Applications/Docker.app/Contents/Resources/bin/docker",
 )
@@ -253,11 +254,35 @@ def _check_os_updates_now() -> Dict[str, Any]:
             )
             output = result.stdout + result.stderr
             available = "No new software available" not in output and "recommended" in output.lower()
-            return {"available": available}
+            return {"available": available, "source": "softwareupdate"}
         if system_name == "Linux":
-            if shutil.which("apt-get"):
+            # Primary: `apt list --upgradable` — no root, no dpkg lock, always fresh.
+            # Use full path so it works even when service PATH is minimal.
+            apt_bin = shutil.which("apt") or "/usr/bin/apt"
+            if os.path.isfile(apt_bin) and os.access(apt_bin, os.X_OK):
+                try:
+                    result = subprocess.run(
+                        [apt_bin, "list", "--upgradable"],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"},
+                    )
+                    # Each upgradable package prints one line containing "/"
+                    # The header line "Listing..." does not contain "/"
+                    count = sum(
+                        1
+                        for line in result.stdout.splitlines()
+                        if "/" in line
+                    )
+                    return {"available": count > 0, "count": count, "source": "apt"}
+                except Exception:
+                    pass
+            # Fallback: apt-get -s upgrade (may need dpkg lock)
+            apt_get_bin = shutil.which("apt-get") or "/usr/bin/apt-get"
+            if os.path.isfile(apt_get_bin) and os.access(apt_get_bin, os.X_OK):
                 result = subprocess.run(
-                    ["apt-get", "-s", "upgrade"],
+                    [apt_get_bin, "-s", "upgrade"],
                     capture_output=True,
                     text=True,
                     timeout=60,
@@ -268,17 +293,18 @@ def _check_os_updates_now() -> Dict[str, Any]:
                     for line in result.stdout.splitlines()
                     if line.startswith("Inst ")
                 )
-                return {"available": upgraded > 0, "count": upgraded}
+                return {"available": upgraded > 0, "count": upgraded, "source": "apt"}
             for pkg_mgr in ("dnf", "yum"):
-                if shutil.which(pkg_mgr):
+                pkg_bin = shutil.which(pkg_mgr)
+                if pkg_bin:
                     result = subprocess.run(
-                        [pkg_mgr, "check-update", "-q"],
+                        [pkg_bin, "check-update", "-q"],
                         capture_output=True,
                         text=True,
                         timeout=60,
                     )
                     # exit code 100 = updates available; 0 = up to date
-                    return {"available": result.returncode == 100}
+                    return {"available": result.returncode == 100, "source": pkg_mgr}
     except Exception:
         pass
     return {"available": None}  # unknown / unsupported
@@ -353,16 +379,23 @@ def _get_cpu_temperature() -> Optional[float]:
     if system == "Linux":
         try:
             temps = psutil.sensors_temperatures()
-            if not temps:
-                return None
-            # Preference order: Raspberry Pi thermal zone, Intel coretemp, AMD k10temp, fallback
-            for key in ("cpu_thermal", "cpu-thermal", "coretemp", "k10temp"):
-                if key in temps and temps[key]:
-                    return round(temps[key][0].current, 1)
-            # Fallback: first available sensor that looks CPU-related
-            for key, entries in temps.items():
-                if entries and any(k in key.lower() for k in ("cpu", "core", "temp", "thermal")):
-                    return round(entries[0].current, 1)
+            if temps:
+                # Preference order: Raspberry Pi thermal zone, Intel coretemp, AMD k10temp, fallback
+                for key in ("cpu_thermal", "cpu-thermal", "coretemp", "k10temp"):
+                    if key in temps and temps[key]:
+                        return round(temps[key][0].current, 1)
+                # Fallback: first available sensor that looks CPU-related
+                for key, entries in temps.items():
+                    if entries and any(k in key.lower() for k in ("cpu", "core", "temp", "thermal")):
+                        return round(entries[0].current, 1)
+        except Exception:
+            pass
+        # Direct sysfs fallback — always works on Raspberry Pi, no root needed
+        try:
+            tz0 = Path("/sys/class/thermal/thermal_zone0/temp")
+            if tz0.exists():
+                raw = tz0.read_text(encoding="ascii").strip()
+                return round(int(raw) / 1000.0, 1)
         except Exception:
             pass
         return None
@@ -410,6 +443,9 @@ def _collect_docker_info() -> Dict[str, Any]:
         return {"available": False, "error": "unknown"}
 
     if result.returncode != 0:
+        stderr_lower = result.stderr.lower()
+        if "permission denied" in stderr_lower or "connect: permission denied" in stderr_lower:
+            return {"available": False, "error": "permission_denied"}
         return {"available": False, "error": "daemon_not_running"}
 
     containers: List[Dict[str, Any]] = []
@@ -439,6 +475,34 @@ def _collect_docker_info() -> Dict[str, Any]:
         "total": len(containers),
         "containers": containers,
     }
+
+
+def _get_processor_name(uname: Any) -> str:
+    """Return a human-readable processor name.
+
+    On ARM Linux (Raspberry Pi), both uname.processor and platform.processor()
+    return an empty string.  This helper falls back to /proc/cpuinfo and then
+    to the architecture string (e.g. 'aarch64') so the field is never blank.
+    """
+    name = uname.processor or platform.processor()
+    if name:
+        return name
+    if platform.system() == "Linux":
+        try:
+            cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="ignore")
+            # x86 / x86_64: 'model name : Intel(R) Core(TM) i7-...'
+            m = re.search(r"^model name\s*:\s*(.+)$", cpuinfo, re.MULTILINE | re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+            # Raspberry Pi (BCM SoC): 'Hardware\t: BCM2711'
+            m = re.search(r"^Hardware\s*:\s*(.+)$", cpuinfo, re.MULTILINE | re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+        except Exception:
+            pass
+        # Last resort: architecture string ('aarch64', 'armv7l', ...)
+        return uname.machine or ""
+    return name
 
 
 def collect_system_metrics() -> Dict[str, Any]:
@@ -476,7 +540,7 @@ def collect_system_metrics() -> Dict[str, Any]:
             "frequency_mhz": cpu_freq.current if cpu_freq else None,
             "min_frequency_mhz": cpu_freq.min if cpu_freq else None,
             "max_frequency_mhz": cpu_freq.max if cpu_freq else None,
-            "processor": uname.processor or platform.processor(),
+            "processor": _get_processor_name(uname),
             "temperature_c": _get_cpu_temperature(),
         },
         "memory": memory,
