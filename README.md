@@ -52,4 +52,6 @@ Open `http://YOUR_SERVER:5050/dashboard` and filter by hostname and timeframe to
 ## Getting Help
 - `client/README.md` — installation, configuration, and service management for the agent.
 - `server/README.md` — server configuration, Docker usage, and API endpoints.
-- `ARCHITECTURE.md` — overview for new contributors.
+- `ARCHITECTURE.md` — high-level design and data flow.
+- `CONTRIBUTING.md` — how to set up a dev environment, make changes, and what you can learn.
+- `AGENTS.md` — rules and conventions for AI coding agents working in this repo.
