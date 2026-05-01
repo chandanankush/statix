@@ -191,13 +191,20 @@ if ! "$PYTHON" -m venv --help &>/dev/null 2>&1; then
     fi
 fi
 
-# Create the parent directory — if this fails, ~/.local is likely owned by root
-# from a previous 'sudo' run. Tell the user exactly how to fix it.
+# Create the parent directory — if this fails, the home directory or ~/.local
+# is likely owned by root from a previous 'sudo' run. Diagnose and advise.
 if ! mkdir -p "$(dirname "$VENV_DIR")" 2>/dev/null; then
-    die "Cannot create $(dirname "$VENV_DIR") — directory is probably owned by root.
+    if [[ ! -w "$HOME" ]]; then
+        die "Your home directory $HOME is not writable by $(whoami).
     Fix it by running:
-      sudo chown -R \$(whoami):\$(whoami) \"$HOME/.local\"
+      sudo chown $(whoami):$(whoami) \"$HOME\"
     Then re-run this installer."
+    else
+        die "Cannot create $(dirname "$VENV_DIR") — directory may be owned by root.
+    Fix it by running:
+      sudo chown -R $(whoami):$(whoami) \"$HOME/.local\"
+    Then re-run this installer."
+    fi
 fi
 # create venv only on fresh install; on upgrade reuse the existing one
 if [[ ! -d "$VENV_DIR" ]]; then

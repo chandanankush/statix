@@ -165,7 +165,7 @@ system-stats-forwarder  # polls :5001 → monitoring server
 | Problem | Fix |
 |---|---|
 | `externally-managed-environment` error | Use the installer script — it creates its own venv automatically. |
-| `Permission denied` creating `~/.local` | A previous `sudo` run left `~/.local` owned by root. Fix: `sudo chown -R $(whoami):$(whoami) ~/.local` then re-run the installer. |
+| `Permission denied` creating `~/.local` | Your home directory is probably owned by root from a previous `sudo` run. Check: `ls -la /home/ \| grep $(whoami)`. If it's owned by root, fix: `sudo chown $(whoami):$(whoami) $HOME` then re-run the installer. |
 | `bash: /dev/fd/63: No such file or directory` when using `sudo bash <(curl ...)` | Do not use `sudo`. The installer runs as your normal user. Use the pipe form instead: `curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh \| bash` |
 | Service not starting on Raspberry Pi after reboot | Run `sudo loginctl enable-linger $(whoami)` so systemd user services survive without an active login session. |
 | Disk metrics show wrong mount | Set `SYSTEM_STATS_DISK_PATH` to the mount you want to track. |
