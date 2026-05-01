@@ -1461,6 +1461,7 @@
 
         let lastDetailsHostname = null;
         let lastDetailsUpdatedAt = null;
+        let lastDetailsCached = null;
         let knownHosts = new Set(Array.from(hostnameFilter.options).slice(1).map(option => option.value));
 
         const AUTO_CYCLE_VALUE = '__auto__';
@@ -2711,6 +2712,7 @@
                     return;
                 }
                 renderHostDetails(payload.details);
+                lastDetailsCached = payload.details;
                 lastDetailsHostname = hostname;
                 lastDetailsUpdatedAt = payload.updated_at;
                 detailsSection.classList.remove('hidden');
@@ -3010,7 +3012,11 @@
             });
             const closeModal = () => {
                 widgetModal.classList.add('hidden');
-                fetchMetrics();
+                // Re-apply thresholds instantly using cached data (no network wait)
+                if (lastDetailsCached) {
+                    renderHostDetails(lastDetailsCached);
+                    lastDetailsUpdatedAt = null; // force full re-render on next poll
+                }
             };
             closeWidgetModal.addEventListener('click', closeModal);
             widgetModal.addEventListener('click', e => { if (e.target === widgetModal) closeModal(); });
