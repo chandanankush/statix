@@ -1203,9 +1203,9 @@
         <ul id="hostUpdateList" class="status-hostlist" style="display:none"></ul>
     </section>
 
-    <div id="versionWarningBanner" style="display:none;margin:0 0 12px 0;padding:10px 16px;border-radius:8px;background:rgba(255,180,0,0.13);border:1px solid rgba(255,180,0,0.45);color:var(--text,#e0e0e0);font-size:0.88rem;line-height:1.5">
-        <strong>⚠ Version mismatch detected</strong>
-        <ul id="versionWarningList" style="margin:6px 0 0 18px;padding:0"></ul>
+    <div id="versionStatusPanel" style="display:none;margin:0 0 12px 0;padding:10px 16px;border-radius:8px;background:var(--card-bg,#1a1d23);border:1px solid var(--border,#2a2d35);font-size:0.88rem;line-height:1.7">
+        <strong style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.07em;opacity:0.5">Version Status</strong>
+        <ul id="versionStatusList" style="margin:6px 0 0 0;padding:0;list-style:none"></ul>
     </div>
 
     <section class="details hidden" id="hostDetailsSection">
@@ -3221,20 +3221,27 @@
         }
 
         // ── version warning helpers ───────────────────────────────────────────
-        const _versionWarnings = new Map(); // key → message
+        const _versionStatus = new Map(); // key → {level:'ok'|'warn'|'info', msg:string}
 
         function _refreshVersionBanner() {
-            const banner = document.getElementById('versionWarningBanner');
-            const list   = document.getElementById('versionWarningList');
-            if (!banner || !list) return;
+            const panel = document.getElementById('versionStatusPanel');
+            const list  = document.getElementById('versionStatusList');
+            if (!panel || !list) return;
             while (list.firstChild) list.removeChild(list.firstChild);
-            if (_versionWarnings.size === 0) { banner.style.display = 'none'; return; }
-            _versionWarnings.forEach(msg => {
+            if (_versionStatus.size === 0) { panel.style.display = 'none'; return; }
+            _versionStatus.forEach(({level, msg}) => {
                 const li = document.createElement('li');
-                li.textContent = msg;
+                li.style.cssText = 'padding:2px 0;color:var(--text,#e0e0e0)';
+                const icon = level === 'ok' ? '✓' : level === 'warn' ? '⚠' : 'ℹ';
+                const color = level === 'ok' ? '#4caf50' : level === 'warn' ? '#ffb400' : '#888';
+                const badge = document.createElement('span');
+                badge.style.cssText = `color:${color};font-weight:700;margin-right:7px;font-size:1em`;
+                badge.textContent = icon;
+                li.appendChild(badge);
+                li.appendChild(document.createTextNode(msg));
                 list.appendChild(li);
             });
-            banner.style.display = '';
+            panel.style.display = '';
         }
 
         async function checkServerVersion() {
@@ -3246,31 +3253,23 @@
                 if (data.expected_client_version) {
                     EXPECTED_CLIENT_VERSION = data.expected_client_version;
                 }
-                const sv = data.version || null;
+                const sv     = data.version || null;
                 const latest = data.latest_version || null;
 
-                // Warn if the running server image is behind the latest commit on main.
-                // Both values are short SHAs; skip comparison in dev mode ("dev").
-                if (sv && sv !== 'dev' && latest && latest !== sv) {
-                    _versionWarnings.set('server-outdated',
-                        `A newer server image is available (latest: ${latest}, running: ${sv}). ` +
-                        `Update with: docker pull midnightappcoder/statix:latest && docker compose up -d`);
+                if (!sv || sv === 'dev') {
+                    _versionStatus.set('server', {level:'info',
+                        msg: 'Server: running from source or pre-version image — no update check available.'});
+                } else if (latest && latest !== sv) {
+                    _versionStatus.set('server', {level:'warn',
+                        msg: `Server image is outdated (running: ${sv}, latest on main: ${latest}). ` +
+                             `Update: docker pull midnightappcoder/statix:latest && docker compose up -d`});
+                } else if (latest && latest === sv) {
+                    _versionStatus.set('server', {level:'ok',
+                        msg: `Server is up to date (${sv}).`});
                 } else {
-                    _versionWarnings.delete('server-outdated');
-                }
-
-                // Legacy self-consistency check (dashboard HTML vs running container).
-                if (sv && sv !== EXPECTED_SERVER_VERSION) {
-                    _versionWarnings.set('server',
-                        `Server is running v${sv} but dashboard expects v${EXPECTED_SERVER_VERSION}. ` +
-                        `Pull the latest Docker image and restart the container: ` +
-                        `docker pull midnightappcoder/statix:latest && docker compose up -d`);
-                } else if (!sv) {
-                    _versionWarnings.set('server',
-                        `Server did not report a version — it is likely outdated. ` +
-                        `Pull the latest Docker image: docker pull midnightappcoder/statix:latest && docker compose up -d`);
-                } else {
-                    _versionWarnings.delete('server');
+                    // latest_version is null — GitHub was unreachable
+                    _versionStatus.set('server', {level:'info',
+                        msg: `Server v${sv} — could not reach GitHub to check for a newer image.`});
                 }
                 _refreshVersionBanner();
             } catch(e) { /* ignore network errors */ }
@@ -3278,18 +3277,20 @@
 
         function checkClientVersion(hostname, details) {
             const cv = details && details.statix_client_version;
-            if (!cv) {
-                _versionWarnings.set('client:' + hostname,
-                    `Client on "${hostname}" is outdated (no version reported). ` +
-                    `Re-run the installer on that host to upgrade: ` +
-                    `bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)`);
+            if (!EXPECTED_CLIENT_VERSION || EXPECTED_CLIENT_VERSION === 'dev') {
+                // Server is in dev mode — skip client version check to avoid false positives
+                _versionStatus.delete('client:' + hostname);
+            } else if (!cv || cv === 'dev') {
+                _versionStatus.set('client:' + hostname, {level:'warn',
+                    msg: `Client on "${hostname}" has no version info — re-run the installer to upgrade: ` +
+                         `bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)`});
             } else if (cv !== EXPECTED_CLIENT_VERSION) {
-                _versionWarnings.set('client:' + hostname,
-                    `Client on "${hostname}" is v${cv} but v${EXPECTED_CLIENT_VERSION} is expected. ` +
-                    `Re-run the installer to upgrade: ` +
-                    `bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)`);
+                _versionStatus.set('client:' + hostname, {level:'warn',
+                    msg: `Client on "${hostname}" is outdated (${cv} → ${EXPECTED_CLIENT_VERSION}). ` +
+                         `Re-run the installer: bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)`});
             } else {
-                _versionWarnings.delete('client:' + hostname);
+                _versionStatus.set('client:' + hostname, {level:'ok',
+                    msg: `Client on "${hostname}" is up to date (${cv}).`});
             }
             _refreshVersionBanner();
         }
