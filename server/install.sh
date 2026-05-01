@@ -50,7 +50,14 @@ if docker inspect "$CONTAINER" &>/dev/null 2>&1; then
         PORT=$(docker inspect --format '{{range $p,$conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}' "$CONTAINER" 2>/dev/null || true)
     fi
     if [[ -z "$DATA_DIR" ]]; then
-        DATA_DIR=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Source}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null || true)
+        # Prefer the named volume name (Type==volume) over the raw host path so we
+        # don't try to mkdir inside /var/lib/docker which requires root.
+        _vol_name=$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/app/data") (eq .Type "volume")}}{{.Name}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null || true)
+        if [[ -n "$_vol_name" ]]; then
+            DATA_DIR="$_vol_name"
+        else
+            DATA_DIR=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Source}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null || true)
+        fi
     fi
 fi
 
@@ -74,7 +81,14 @@ else
     info "Keeping existing data dir : $DATA_DIR  (pass --data-dir to change)"
 fi
 
-mkdir -p "$DATA_DIR"
+# Only mkdir for plain host paths; Docker-managed named volumes don't need it
+# (and /var/lib/docker is root-owned — mkdir would fail).
+if [[ "$DATA_DIR" != /* ]]; then
+    # Named volume — Docker creates it automatically on first use.
+    true
+else
+    mkdir -p "$DATA_DIR"
+fi
 info "Dashboard port : $PORT"
 info "Data directory : $DATA_DIR"
 
