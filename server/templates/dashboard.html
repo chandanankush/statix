@@ -3249,12 +3249,14 @@
                 const resp = await fetch('/health');
                 if (!resp.ok) return;
                 const data = await resp.json();
-                // Populate expected client version from server so dashboard never needs updating
-                if (data.expected_client_version) {
-                    EXPECTED_CLIENT_VERSION = data.expected_client_version;
-                }
                 const sv     = data.version || null;
                 const latest = data.latest_version || null;
+
+                // Store latest GitHub SHA globally — used as source of truth for client checks too.
+                // This ensures client and server versions are both compared against the same baseline.
+                if (latest && latest !== 'dev') {
+                    EXPECTED_CLIENT_VERSION = latest;
+                }
 
                 if (!sv || sv === 'dev') {
                     _versionStatus.set('server', {level:'info',
@@ -3277,8 +3279,8 @@
 
         function checkClientVersion(hostname, details) {
             const cv = details && details.statix_client_version;
-            if (!EXPECTED_CLIENT_VERSION || EXPECTED_CLIENT_VERSION === 'dev') {
-                // Server is in dev mode — skip client version check to avoid false positives
+            if (!EXPECTED_CLIENT_VERSION) {
+                // GitHub unreachable — can't determine expected version, skip check
                 _versionStatus.delete('client:' + hostname);
             } else if (!cv || cv === 'dev') {
                 _versionStatus.set('client:' + hostname, {level:'warn',
