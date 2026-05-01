@@ -250,7 +250,7 @@ if [[ ! -d "$VENV_DIR" ]]; then
     "$PYTHON" -m venv "$VENV_DIR"
 fi
 
-"$VENV_DIR/bin/pip" install --quiet --upgrade "$PACKAGE_URL"
+"$VENV_DIR/bin/pip" install --quiet --force-reinstall --no-deps "$PACKAGE_URL"
 if [[ "$IS_UPGRADE" == true ]]; then
     success "Package upgraded"
 else

@@ -40,6 +40,10 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,prefix=,format=short
 
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -49,6 +53,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: GIT_SHA=${{ steps.meta.outputs.version }}
+          build-args: GIT_SHA=${{ steps.sha.outputs.short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
