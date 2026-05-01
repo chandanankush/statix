@@ -212,9 +212,21 @@
             color: #b45309;
         }
 
-        .chart-container {
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
             max-width: 1080px;
             margin: 0 auto 32px;
+        }
+
+        @media (min-width: 768px) {
+            .charts-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .chart-container {
             background: var(--color-chart-container-bg);
             padding: 24px 28px;
             border-radius: 18px;
@@ -712,6 +724,7 @@
         </div>
     </section>
 
+    <section class="details hidden" id="hostDetailsSection">
         <div class="cards-grid">
             <article class="card">
                 <div class="card-header">
@@ -846,21 +859,23 @@
         </ul>
     </section>
 
-    <div class="chart-container">
-        <h2>CPU Usage (%)</h2>
-        <canvas id="cpuChart"></canvas>
-    </div>
-    <div class="chart-container">
-        <h2>RAM Usage (%)</h2>
-        <canvas id="ramChart"></canvas>
-    </div>
-    <div class="chart-container">
-        <h2>Disk I/O (MB/s)</h2>
-        <canvas id="diskChart"></canvas>
-    </div>
-    <div class="chart-container">
-        <h2>Network I/O (MB/s)</h2>
-        <canvas id="netChart"></canvas>
+    <div class="charts-grid">
+        <div class="chart-container">
+            <h2>CPU Usage (%)</h2>
+            <canvas id="cpuChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>RAM Usage (%)</h2>
+            <canvas id="ramChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Disk I/O (MB/s)</h2>
+            <canvas id="diskChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Network I/O (MB/s)</h2>
+            <canvas id="netChart"></canvas>
+        </div>
     </div>
 
     <script>
