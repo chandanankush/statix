@@ -81,9 +81,10 @@ if ! "$PYTHON" -m pip --version &>/dev/null 2>&1; then
     fi
 fi
 
-# ── detect existing install & read saved config ──────────────────────────────
+# ── detect existing install & read saved config ─────────────────────────────
+VENV_DIR="$HOME/.local/share/statix/venv"
 IS_UPGRADE=false
-if "$PYTHON" -m pip show system-stats-service &>/dev/null 2>&1; then
+if [[ -x "$VENV_DIR/bin/system-stats-service" ]]; then
     IS_UPGRADE=true
     warn "Existing installation detected — will upgrade."
 fi
@@ -146,13 +147,14 @@ METRICS_URL="${SERVER_URL}/metrics"
 info "Server metrics endpoint : $METRICS_URL"
 info "Forward interval        : ${INTERVAL}s"
 
-# ── install the Python package from GitHub ───────────────────────────────────
+# ── install into a dedicated venv (avoids PEP 668 / externally-managed-env) ─
 if [[ "$IS_UPGRADE" == true ]]; then
     header "Upgrading system-stats-service from GitHub …"
 else
     header "Installing system-stats-service from GitHub …"
 fi
 info "Source: https://github.com/${GITHUB_REPO} (branch: ${GITHUB_BRANCH})"
+info "Venv  : $VENV_DIR"
 
 # git is required for pip install from VCS
 if ! command -v git &>/dev/null; then
@@ -164,36 +166,34 @@ if ! command -v git &>/dev/null; then
     fi
 fi
 
-"$PYTHON" -m pip install --user --quiet --upgrade "$PACKAGE_URL"
+# ensure python3-venv module is present (Raspberry Pi OS Lite may omit it)
+if ! "$PYTHON" -m venv --help &>/dev/null 2>&1; then
+    if [[ "$PLATFORM" == "linux" ]]; then
+        warn "python3-venv not found. Installing …"
+        sudo apt-get install -y python3-venv
+    else
+        die "Python venv module is missing. Reinstall Python from https://www.python.org/"
+    fi
+fi
+
+mkdir -p "$(dirname "$VENV_DIR")"
+# create venv only on fresh install; on upgrade reuse the existing one
+if [[ ! -d "$VENV_DIR" ]]; then
+    "$PYTHON" -m venv "$VENV_DIR"
+fi
+
+"$VENV_DIR/bin/pip" install --quiet --upgrade "$PACKAGE_URL"
 if [[ "$IS_UPGRADE" == true ]]; then
     success "Package upgraded"
 else
     success "Package installed"
 fi
 
-# ── locate installed scripts ──────────────────────────────────────────────────
-# pip --user puts scripts in ~/.local/bin (Linux) or ~/Library/Python/X.Y/bin (macOS)
-find_script() {
-    local name="$1"
-    # Try PATH first (covers cases where user already has the right bin dir in PATH)
-    if command -v "$name" &>/dev/null; then
-        command -v "$name"
-        return
-    fi
-    # Common user-scheme locations
-    local candidates=(
-        "$HOME/.local/bin/$name"
-        "$("$PYTHON" -c 'import sysconfig; print(sysconfig.get_path("scripts", "posix_user"))')/$name"
-        "$("$PYTHON" -m site --user-base)/bin/$name"
-    )
-    for p in "${candidates[@]}"; do
-        [[ -x "$p" ]] && { echo "$p"; return; }
-    done
-    die "Could not locate '$name' after install. Make sure $("$PYTHON" -m site --user-base)/bin is in your PATH."
-}
-
-SVC_BIN="$(find_script system-stats-service)"
-FWD_BIN="$(find_script system-stats-forwarder)"
+# ── set binary paths (always inside the venv) ────────────────────────────────
+SVC_BIN="$VENV_DIR/bin/system-stats-service"
+FWD_BIN="$VENV_DIR/bin/system-stats-forwarder"
+[[ -x "$SVC_BIN" ]] || die "system-stats-service binary not found in venv after install."
+[[ -x "$FWD_BIN" ]] || die "system-stats-forwarder binary not found in venv after install."
 success "Service binary  : $SVC_BIN"
 success "Forwarder binary: $FWD_BIN"
 

@@ -45,12 +45,13 @@ else
     systemctl --user daemon-reload
 fi
 
-header "Removing Python package …"
-if python3 -m pip show system-stats-service &>/dev/null 2>&1; then
-    python3 -m pip uninstall -y system-stats-service
-    success "Package removed"
+header "Removing statix venv …"
+VENV_DIR="$HOME/.local/share/statix/venv"
+if [[ -d "$VENV_DIR" ]]; then
+    rm -rf "$HOME/.local/share/statix"
+    success "Venv removed ($VENV_DIR)"
 else
-    warn "Package not found in pip (already removed?)"
+    warn "Venv not found at $VENV_DIR (already removed?)"
 fi
 
 success "Uninstall complete."
