@@ -3,9 +3,6 @@ name: Build & Publish statix to Docker Hub
 on:
   push:
     branches: [main]
-    paths:
-      - "server/**"
-      - ".github/workflows/docker-publish.yml"
   workflow_dispatch:   # allow manual trigger from GitHub UI
 
 env:
