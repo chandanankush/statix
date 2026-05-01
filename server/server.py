@@ -18,6 +18,10 @@ from flask import Flask, jsonify, render_template, request
 # The dashboard bakes this in as EXPECTED_SERVER_VERSION and warns on mismatch.
 SERVER_VERSION = "1.1.0"
 
+# Minimum client version the server considers fully compatible.
+# Bump this whenever client/system_stats/metrics.py adds new required fields.
+EXPECTED_CLIENT_VERSION = "1.1.0"
+
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = BASE_DIR / "data" / "metrics.db"
 DB_PATH = os.getenv("DATABASE_PATH", str(DEFAULT_DB_PATH))
@@ -547,7 +551,7 @@ def dashboard():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": SERVER_VERSION})
+    return jsonify({"status": "ok", "version": SERVER_VERSION, "expected_client_version": EXPECTED_CLIENT_VERSION})
 
 
 if __name__ == "__main__":

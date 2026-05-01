@@ -1554,7 +1554,8 @@
         const AUTH_REQUIRED = {{ 'true' if auth_required else 'false' }};
         // Version constants — must match SERVER_VERSION / STATIX_CLIENT_VERSION in server.py / metrics.py
         const EXPECTED_SERVER_VERSION = "{{ server_version }}";
-        const EXPECTED_CLIENT_VERSION = "1.1.0";
+        // EXPECTED_CLIENT_VERSION is fetched dynamically from /health — do not hardcode here.
+        let EXPECTED_CLIENT_VERSION = null;
         let _apiToken = null;
 
         function getAuthHeaders() {
@@ -3241,6 +3242,10 @@
                 const resp = await fetch('/health');
                 if (!resp.ok) return;
                 const data = await resp.json();
+                // Populate expected client version from server so dashboard never needs updating
+                if (data.expected_client_version) {
+                    EXPECTED_CLIENT_VERSION = data.expected_client_version;
+                }
                 const sv = data.version || null;
                 if (sv && sv !== EXPECTED_SERVER_VERSION) {
                     _versionWarnings.set('server',
