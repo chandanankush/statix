@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import datetime as dt
+
+# Increment this whenever the /system payload shape changes so the dashboard
+# can detect clients running old code.
+STATIX_CLIENT_VERSION = "1.1.0"
 import json
 import os
 import platform
@@ -568,4 +572,5 @@ def collect_system_metrics() -> Dict[str, Any]:
             "os_update": _get_os_updates(),
         },
         "docker": _collect_docker_info(),
+        "statix_client_version": STATIX_CLIENT_VERSION,
     }

@@ -1203,6 +1203,11 @@
         <ul id="hostUpdateList" class="status-hostlist" style="display:none"></ul>
     </section>
 
+    <div id="versionWarningBanner" style="display:none;margin:0 0 12px 0;padding:10px 16px;border-radius:8px;background:rgba(255,180,0,0.13);border:1px solid rgba(255,180,0,0.45);color:var(--text,#e0e0e0);font-size:0.88rem;line-height:1.5">
+        <strong>⚠ Version mismatch detected</strong>
+        <ul id="versionWarningList" style="margin:6px 0 0 18px;padding:0"></ul>
+    </div>
+
     <section class="details hidden" id="hostDetailsSection">
         <div class="cards-grid">
             <article class="card" data-widget="cpu-info">
@@ -1547,6 +1552,9 @@
         const timeframePresets = {{ timeframe_presets | tojson }};
         const defaultTimeframe = "{{ default_timeframe }}";
         const AUTH_REQUIRED = {{ 'true' if auth_required else 'false' }};
+        // Version constants — must match SERVER_VERSION / STATIX_CLIENT_VERSION in server.py / metrics.py
+        const EXPECTED_SERVER_VERSION = "{{ server_version }}";
+        const EXPECTED_CLIENT_VERSION = "1.1.0";
         let _apiToken = null;
 
         function getAuthHeaders() {
@@ -1790,6 +1798,7 @@
             } catch (error) {
                 console.warn('Unable to persist theme preference:', error);
             }
+            _saveToServer({ [themeStorageKey]: nextTheme });
             updateThemeToggleLabel(nextTheme);
             refreshChartTheme();
         };
@@ -2353,7 +2362,9 @@
         }
 
         function saveThresholds(t) {
-            localStorage.setItem(LS_THRESHOLDS, JSON.stringify(t));
+            const str = JSON.stringify(t);
+            localStorage.setItem(LS_THRESHOLDS, str);
+            _saveToServer({ [LS_THRESHOLDS]: str });
         }
 
         function populateThresholdUI(t) {
@@ -2869,6 +2880,7 @@
                     return;
                 }
                 renderHostDetails(payload.details);
+                checkClientVersion(hostname, payload.details);
                 lastDetailsCached = payload.details;
                 lastDetailsHostname = hostname;
                 lastDetailsUpdatedAt = payload.updated_at;
@@ -3034,8 +3046,19 @@
         function lsLoad(key, fallback) {
             try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(_) { return fallback; }
         }
+        function _saveToServer(payload) {
+            // Fire-and-forget; only sends if auth is not required or token is cached.
+            if (AUTH_REQUIRED && !_apiToken) return;
+            fetch('/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify(payload)
+            }).catch(() => {});
+        }
         function lsSave(key, val) {
-            try { localStorage.setItem(key, JSON.stringify(val)); } catch(_) {}
+            const str = JSON.stringify(val);
+            try { localStorage.setItem(key, str); } catch(_) {}
+            _saveToServer({ [key]: str });
         }
 
         function applyWidgetOrder(grid, registry, storageKey) {
@@ -3180,10 +3203,86 @@
             initThresholdListeners();
         }
 
-        initWidgetSystem();
+        async function loadServerSettings() {
+            try {
+                const resp = await fetch('/settings');
+                if (resp.ok) {
+                    const saved = await resp.json();
+                    // Mirror all server-stored settings into localStorage so existing
+                    // synchronous lsLoad() calls pick them up immediately.
+                    for (const [k, v] of Object.entries(saved)) {
+                        try { localStorage.setItem(k, v); } catch(_) {}
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not load settings from server, using localStorage:', e);
+            }
+        }
 
-        loadHosts();
-        setInterval(fetchMetrics, 1000);
+        // ── version warning helpers ───────────────────────────────────────────
+        const _versionWarnings = new Map(); // key → message
+
+        function _refreshVersionBanner() {
+            const banner = document.getElementById('versionWarningBanner');
+            const list   = document.getElementById('versionWarningList');
+            if (!banner || !list) return;
+            while (list.firstChild) list.removeChild(list.firstChild);
+            if (_versionWarnings.size === 0) { banner.style.display = 'none'; return; }
+            _versionWarnings.forEach(msg => {
+                const li = document.createElement('li');
+                li.textContent = msg;
+                list.appendChild(li);
+            });
+            banner.style.display = '';
+        }
+
+        async function checkServerVersion() {
+            try {
+                const resp = await fetch('/health');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const sv = data.version || null;
+                if (sv && sv !== EXPECTED_SERVER_VERSION) {
+                    _versionWarnings.set('server',
+                        `Server is running v${sv} but dashboard expects v${EXPECTED_SERVER_VERSION}. ` +
+                        `Pull the latest Docker image and restart the container: ` +
+                        `docker pull midnightappcoder/statix:latest && docker compose up -d`);
+                } else if (!sv) {
+                    _versionWarnings.set('server',
+                        `Server did not report a version — it is likely outdated. ` +
+                        `Pull the latest Docker image: docker pull midnightappcoder/statix:latest && docker compose up -d`);
+                } else {
+                    _versionWarnings.delete('server');
+                }
+                _refreshVersionBanner();
+            } catch(e) { /* ignore network errors */ }
+        }
+
+        function checkClientVersion(hostname, details) {
+            const cv = details && details.statix_client_version;
+            if (!cv) {
+                _versionWarnings.set('client:' + hostname,
+                    `Client on "${hostname}" is outdated (no version reported). ` +
+                    `Re-run the installer on that host to upgrade: ` +
+                    `bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)`);
+            } else if (cv !== EXPECTED_CLIENT_VERSION) {
+                _versionWarnings.set('client:' + hostname,
+                    `Client on "${hostname}" is v${cv} but v${EXPECTED_CLIENT_VERSION} is expected. ` +
+                    `Re-run the installer to upgrade: ` +
+                    `bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)`);
+            } else {
+                _versionWarnings.delete('client:' + hostname);
+            }
+            _refreshVersionBanner();
+        }
+
+        (async () => {
+            await loadServerSettings();
+            await checkServerVersion();
+            initWidgetSystem();
+            loadHosts();
+            setInterval(fetchMetrics, 1000);
+        })();
     </script>
 </body>
 </html>

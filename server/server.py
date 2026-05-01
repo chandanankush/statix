@@ -14,6 +14,10 @@ from typing import Any, Dict, Iterable, List, Optional
 from flask import Flask, jsonify, render_template, request
 
 
+# Increment this whenever server.py or dashboard.html changes significantly.
+# The dashboard bakes this in as EXPECTED_SERVER_VERSION and warns on mismatch.
+SERVER_VERSION = "1.1.0"
+
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = BASE_DIR / "data" / "metrics.db"
 DB_PATH = os.getenv("DATABASE_PATH", str(DEFAULT_DB_PATH))
@@ -141,6 +145,14 @@ def ensure_database() -> None:
                 hostname TEXT PRIMARY KEY,
                 details_json TEXT NOT NULL,
                 updated_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             )
             """
         )
@@ -480,6 +492,45 @@ def delete_host_endpoint(hostname: str):
     return jsonify({"status": "ok", **outcome})
 
 
+# ── dashboard settings (UI preferences: theme, thresholds, widget order) ─────
+
+def _get_all_settings() -> Dict[str, str]:
+    with closing(open_connection()) as conn:
+        rows = conn.execute("SELECT key, value FROM settings").fetchall()
+    return {row["key"]: row["value"] for row in rows}
+
+
+def _upsert_settings(data: Dict[str, str]) -> None:
+    with closing(open_connection()) as conn:
+        for key, value in data.items():
+            conn.execute(
+                "INSERT INTO settings(key, value) VALUES(?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
+        conn.commit()
+
+
+@app.route("/settings", methods=["GET"])
+def get_settings():
+    return jsonify(_get_all_settings())
+
+
+@app.route("/settings", methods=["PUT"])
+@_require_api_key
+def put_settings():
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "expected JSON object"}), 400
+    cleaned: Dict[str, str] = {}
+    for k, v in data.items():
+        if not isinstance(k, str) or len(k) > 200:
+            continue
+        cleaned[k] = v if isinstance(v, str) else json.dumps(v)
+    _upsert_settings(cleaned)
+    return jsonify({"status": "ok"})
+
+
 @app.route("/dashboard", methods=["GET"])
 def dashboard():
     hostnames = get_known_hostnames()
@@ -490,12 +541,13 @@ def dashboard():
         timeframe_labels=TIMEFRAME_LABELS,
         default_timeframe="1h",
         auth_required=(API_KEY is not None),
+        server_version=SERVER_VERSION,
     )
 
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "version": SERVER_VERSION})
 
 
 if __name__ == "__main__":
