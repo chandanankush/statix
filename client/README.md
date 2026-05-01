@@ -102,29 +102,51 @@ Returns a full snapshot of the host. Example response:
     "logical_cores": 12,
     "physical_cores": 12,
     "frequency_mhz": 3200,
-    "processor": "arm"
+    "processor": "arm",
+    "temperature_c": 52.1
   },
   "memory": { "percent": 59.5, "total": 25769803776, "available": 10435428352 },
   "swap":   { "percent": 0.0, "total": 0 },
   "disk":   { "percent": 20.7, "mount": "/", "total": 494384795648 },
   "disk_io": { "read_bytes": 176723312640, "write_bytes": 80530432000 },
   "network": {
-    "primary_interface": { "name": "en0", "ipv4": "192.168.0.82", "speed_mbps": 1000 }
+    "primary_interface": { "name": "en0", "ipv4": "192.168.0.82", "speed_mbps": 1000, "link_type": "Ethernet" },
+    "interfaces": [
+      { "name": "en0", "ipv4": "192.168.0.82", "speed_mbps": 1000, "link_type": "Ethernet" },
+      { "name": "en1", "ipv4": "10.0.0.5",     "speed_mbps": 600,  "link_type": "WiFi" }
+    ]
   },
   "uptime": { "seconds": 37422, "human": "10h 23m", "boot_time": "2026-05-01T00:59:22+05:30" },
-  "system": { "hostname": "chandan-mac-mini.local", "os": "Darwin", "model": "Mac16,11" },
+  "system": {
+    "hostname": "chandan-mac-mini.local",
+    "os": "Darwin",
+    "model": "Mac16,11",
+    "os_update": { "available": true, "count": 3, "source": "softwareupdate" }
+  },
   "docker": {
     "available": true,
     "running": 2,
     "total": 3,
     "containers": [
-      {"id": "abc123def456", "name": "statix-statix-1", "image": "midnightappcoder/statix:latest", "state": "running", "status": "Up 4 minutes", "ports": "0.0.0.0:5050->5000/tcp"},
-      {"id": "789ghi012jkl", "name": "statix-db-1", "image": "postgres:15", "state": "running", "status": "Up 4 minutes", "ports": ""},
-      {"id": "mno345pqr678", "name": "old-container", "image": "nginx:latest", "state": "exited", "status": "Exited (0) 2 days ago", "ports": ""}
+      {
+        "id": "abc123def456",
+        "name": "statix-statix-1",
+        "image": "midnightappcoder/statix:latest",
+        "state": "running",
+        "status": "Up 4 minutes",
+        "ports": "0.0.0.0:5050->5000/tcp",
+        "update_available": false
+      }
     ]
   }
 }
 ```
+
+**Notes:**
+- `cpu.temperature_c` — `null` on Apple Silicon or when no sensor is readable. On Raspberry Pi and Linux this is always populated. On macOS Intel install `brew install osx-cpu-temp` to enable it.
+- `network.interfaces` — all active (up, non-loopback, IPv4) interfaces. Entire list is cached for 5 minutes.
+- `system.os_update` — cached 24 h. `count` is the number of pending updates; `source` is `softwareupdate` (macOS), `apt` (Debian/RPi), or `dnf`/`yum`.
+- `docker[].update_available` — `true` if a newer image exists on the registry, `false` if up to date, `null` if the check failed or Docker 24+ is not available. Cached 24 h per image.
 
 ### `GET /health`
 ```json

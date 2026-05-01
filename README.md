@@ -1,11 +1,24 @@
 # Monitoring Stack
 
 [![Docker Hub](https://img.shields.io/docker/v/midnightappcoder/statix?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/midnightappcoder/statix)
-[![Latest](https://img.shields.io/badge/version-1.0.1-blue)](https://github.com/chandanankush/statix/releases/tag/v1.0.1)
+[![Latest](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/chandanankush/statix)
 
-This project combines a host-native system stats agent with a lightweight monitoring server and dashboard. The agent gathers CPU, memory, disk, network, and uptime information directly from each machine; the server persists readings, serves APIs, and renders a responsive dashboard with trend charts and host summary cards.
+A self-hosted system monitoring stack. The agent (FastAPI + psutil) runs natively on each host (macOS, Raspberry Pi). The server (Flask + SQLite) runs in Docker and is published to Docker Hub as `midnightappcoder/statix`.
 
 ![stats](https://github.com/user-attachments/assets/2e0ffe7d-c37e-4acd-9ea9-997891104216)
+
+## Features
+- **Live charts** — CPU %, RAM %, Disk I/O, Network I/O with configurable timeframes
+- **Host detail cards** — CPU info & temperature, memory, storage, system info, network, uptime, Docker
+- **OS update check** — shows pending updates on macOS (`softwareupdate`) and Debian/RPi (`apt`), cached 24 h
+- **Docker image update check** — per-container update badge, cached 24 h
+- **All active network interfaces** — shows every up, non-loopback interface with IP, speed, and link type
+- **CPU temperature** — psutil on Linux/Raspberry Pi; `osx-cpu-temp` on macOS Intel; hidden on Apple Silicon
+- **User-configurable alert thresholds** — per-card color (Amber/Red/Blue/Green/Purple/custom hex), percentage input, on/off; persisted in `localStorage`
+- **Drag-to-reorder & hide** cards and charts; order persisted in `localStorage`
+- **Multi-host** — auto-cycles hosts or pin to a specific machine
+- **Dark/light theme** toggle
+- **Multi-arch Docker image** — `linux/amd64` + `linux/arm64` (Raspberry Pi)
 
 ## Quick Usage
 
@@ -14,25 +27,30 @@ Requires Docker. Pulls the pre-built image from Docker Hub:
 ```sh
 bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)
 ```
-Or with Docker Compose (also pulls from Docker Hub by default):
+Or manually with Docker:
 ```sh
-docker-compose up -d
+docker run -d \
+  --name statix \
+  --restart unless-stopped \
+  -p 5050:5000 \
+  -v statix_data:/app/data \
+  midnightappcoder/statix:latest
 ```
-Visit `http://localhost:5050/dashboard` (override port with `--port` flag or `MONITOR_PORT` env var).
+Or with Docker Compose:
+```sh
+docker compose up -d
+```
+Visit `http://localhost:5050/dashboard`.
 
 ### 2. Install the agent on each host (macOS or Raspberry Pi)
-A single command installs, configures, and starts both the stats service and the forwarder as persistent background daemons:
 ```sh
 bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)
 ```
-The script detects your platform, creates an isolated Python environment, registers services (launchd on macOS, systemd on Linux), and sets them to start automatically on boot/login.
-
-Pass flags to skip the interactive prompts:
+Pass flags to skip interactive prompts:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh \
-  | bash -s -- --server-url http://192.168.0.209:5050 --interval 30
+  | bash -s -- --server-url http://YOUR_SERVER:5050 --interval 30
 ```
-
 Re-running the same command upgrades the package and restarts services without losing your config.
 
 To uninstall:
@@ -41,17 +59,23 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/cl
 ```
 
 ### 3. View metrics
-Open `http://YOUR_SERVER:5050/dashboard` and filter by hostname and timeframe to inspect live charts and hardware details.
+Open `http://YOUR_SERVER:5050/dashboard` and filter by hostname and timeframe.
+
+#### Optional: CPU temperature on macOS Intel
+```sh
+brew install osx-cpu-temp
+```
+Temperature is shown automatically once the tool is on PATH. Not available on Apple Silicon.
 
 ## Components
-- **client/** – FastAPI stats service, forwarder, and one-line installer/uninstaller. See `client/README.md`.
-- **server/** – Flask ingestion API, SQLite storage, and Chart.js dashboard. Published as `midnightappcoder/statix` on Docker Hub. See `server/README.md`.
-- **ARCHITECTURE.md** – High-level design and data flow.
-- **docker-compose.yml** – Container orchestration for the monitoring server.
+- **client/** — FastAPI stats service, forwarder, and one-line installer/uninstaller. See `client/README.md`.
+- **server/** — Flask ingestion API, SQLite storage, and Chart.js dashboard. Published as `midnightappcoder/statix` on Docker Hub. See `server/README.md`.
+- **ARCHITECTURE.md** — High-level design and data flow.
+- **docker-compose.yml** — Container orchestration for the monitoring server.
 
 ## Getting Help
-- `client/README.md` — installation, configuration, and service management for the agent.
-- `server/README.md` — server configuration, Docker usage, and API endpoints.
+- `client/README.md` — installation, configuration, service management, and API reference for the agent.
+- `server/README.md` — server configuration, Docker usage, API endpoints, and Docker Hub CI setup.
 - `ARCHITECTURE.md` — high-level design and data flow.
-- `CONTRIBUTING.md` — how to set up a dev environment, make changes, and what you can learn.
+- `CONTRIBUTING.md` — how to set up a dev environment and make changes.
 - `AGENTS.md` — rules and conventions for AI coding agents working in this repo.

@@ -2,8 +2,6 @@
 
 Flask-based monitoring server that ingests host metrics, persists them in SQLite, and renders a Chart.js dashboard. Published to Docker Hub as [`midnightappcoder/statix`](https://hub.docker.com/r/midnightappcoder/statix) — built for `linux/amd64` and `linux/arm64` (Raspberry Pi).
 
-**Current release:** `v1.0.1` — `midnightappcoder/statix:1.0.1`
-
 ## One-Line Install
 
 Requires Docker. Works on any machine — Linux, macOS, or a server/VPS.
@@ -31,25 +29,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/se
 
 ---
 
-## Docker Compose
-
-```sh
-docker-compose up -d
-```
-Dashboard: `http://localhost:5050/dashboard`
-
-Override the port:
-```sh
-MONITOR_PORT=8080 docker-compose up -d
-```
-
-Force a local build instead of pulling from Docker Hub:
-```sh
-docker-compose up --build -d
-```
-
----
-
 ## Manual Docker Run
 
 ```sh
@@ -61,15 +40,26 @@ docker run -d \
   -v statix_data:/app/data \
   -e DATABASE_PATH=/app/data/metrics.db \
   midnightappcoder/statix:latest
+```
 
-# Pinned version
-docker run -d \
-  --name statix \
-  --restart unless-stopped \
-  -p 5050:5000 \
-  -v statix_data:/app/data \
-  -e DATABASE_PATH=/app/data/metrics.db \
-  midnightappcoder/statix:1.0.1
+Dashboard: `http://localhost:5050/dashboard`
+
+---
+
+## Docker Compose
+
+```sh
+docker compose up -d
+```
+
+Override the port:
+```sh
+MONITOR_PORT=8080 docker compose up -d
+```
+
+Force a local build instead of pulling from Docker Hub:
+```sh
+docker compose up --build -d
 ```
 
 ---
