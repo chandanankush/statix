@@ -39,6 +39,41 @@ warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
 die()     { echo -e "${RED}[✗]${NC} $*" >&2; exit 1; }
 header()  { echo -e "\n${BOLD}$*${NC}"; }
 
+# ── port helper ───────────────────────────────────────────────────────────────
+# _free_port <port>  — kills any process holding <port>/tcp so our service can bind.
+# Uses lsof (macOS + Linux), falling back to fuser (Linux only).  Safe to call
+# even if nothing is running on the port.
+_free_port() {
+    local port="$1"
+    local pids=""
+
+    if command -v lsof &>/dev/null; then
+        pids=$(lsof -t -i TCP:"$port" -s TCP:LISTEN 2>/dev/null || true)
+    fi
+    if [[ -z "$pids" ]] && command -v fuser &>/dev/null; then
+        pids=$(fuser "${port}/tcp" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' || true)
+    fi
+
+    if [[ -n "$pids" ]]; then
+        warn "Port $port is in use (PID(s): $(echo "$pids" | tr '\n' ' ')). Stopping conflicting process(es) …"
+        for pid in $pids; do
+            kill "$pid" 2>/dev/null || true
+        done
+        # Give the OS a moment to release the socket
+        local waited=0
+        while [[ $waited -lt 5 ]]; do
+            sleep 1
+            waited=$((waited + 1))
+            local still=""
+            if command -v lsof &>/dev/null; then
+                still=$(lsof -t -i TCP:"$port" -s TCP:LISTEN 2>/dev/null || true)
+            fi
+            [[ -z "$still" ]] && break
+        done
+        success "Port $port is now free"
+    fi
+}
+
 # ── parse CLI args ────────────────────────────────────────────────────────────
 SERVER_URL=""
 INTERVAL=""
@@ -322,6 +357,9 @@ PLIST
     launchctl unload "$launch_agents/com.local.systemstats.service.plist"  2>/dev/null || true
     launchctl unload "$launch_agents/com.local.systemstats.forwarder.plist" 2>/dev/null || true
 
+    # Kill anything still holding port 5001 (e.g. a zombie process from a previous install)
+    _free_port 5001
+
     launchctl load -w "$launch_agents/com.local.systemstats.service.plist"
     launchctl load -w "$launch_agents/com.local.systemstats.forwarder.plist"
 
@@ -388,6 +426,10 @@ UNIT
     # enable (idempotent) then restart so updates take effect immediately
     systemctl --user enable system-stats-service.service
     systemctl --user enable system-stats-forwarder.service
+
+    # Kill anything still holding port 5001 before starting our service
+    _free_port 5001
+
     systemctl --user restart system-stats-service.service
     systemctl --user restart system-stats-forwarder.service
 
