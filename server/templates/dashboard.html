@@ -672,7 +672,16 @@
         .dot-online  { color: #22c55e; margin-right: 6px; }
         .dot-offline { color: #f97316; margin-right: 6px; }
 
-        /* compare host multi-select */
+        /* compare host multi-select — sits below the filters bar, not inside it */
+        #compareFilterControl {
+            max-width: 1080px;
+            margin: -12px auto 16px;
+            display: none;
+        }
+        #compareFilterControl label {
+            display: block;
+            margin-bottom: 4px;
+        }
         #compareHostFilter {
             padding: 6px 10px;
             border-radius: 10px;
@@ -706,11 +715,6 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="filter-control" id="compareFilterControl" style="display:none">
-            <label for="compareHostFilter">Compare with</label>
-            <select id="compareHostFilter" multiple size="3">
-            </select>
-        </div>
         <div class="filter-control">
             <label for="timeframeFilter">Timeframe</label>
             <select id="timeframeFilter">
@@ -732,7 +736,11 @@
         </div>
     </section>
 
-    <section id="hostDetailsSection" class="details hidden">
+    <div id="compareFilterControl">
+        <label for="compareHostFilter">Compare with (Ctrl/Cmd+click to select multiple hosts)</label>
+        <select id="compareHostFilter" multiple size="3">
+        </select>
+    </div>
         <div class="cards-grid">
             <article class="card">
                 <div class="card-header">
@@ -1956,6 +1964,11 @@
                 hideDetails();
                 return;
             }
+            // Immediately hide stale data from a different host so it doesn't
+            // flash while the fetch is in flight.
+            if (lastDetailsHostname !== hostname) {
+                detailsSection.classList.add('hidden');
+            }
             try {
                 const response = await fetch(`/details?hostname=${encodeURIComponent(hostname)}`);
                 if (!response.ok) {
@@ -2066,7 +2079,7 @@
 
                 // Show/hide compare filter (only in single-host mode)
                 if (compareFilterControl) {
-                    compareFilterControl.style.display = (!autoMode && effectiveHostname) ? '' : 'none';
+                    compareFilterControl.style.display = (!autoMode && effectiveHostname) ? 'block' : 'none';
                 }
 
                 if (autoMode && !effectiveHostname) {
