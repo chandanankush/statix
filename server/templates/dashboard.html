@@ -840,6 +840,109 @@
         .toggle-switch input:checked + .toggle-track::before { transform: translateX(18px); }
         .modal-section-gap { margin-top: 16px; }
 
+        /* ── alert threshold settings ────────────────────────────────── */
+        .threshold-section { display: grid; gap: 10px; }
+        .threshold-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 14px;
+            border-radius: 10px;
+            background: var(--color-host-card-bg);
+            border: 1px solid var(--color-card-border);
+        }
+        .threshold-row.threshold-row-2col {
+            grid-template-columns: 1fr auto;
+        }
+        .threshold-label {
+            font-weight: 500;
+            font-size: 0.92rem;
+            color: var(--color-card-text);
+        }
+        .threshold-label small {
+            display: block;
+            font-size: 0.78rem;
+            color: var(--color-card-muted);
+            font-weight: 400;
+            margin-top: 1px;
+        }
+        .threshold-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .threshold-input {
+            width: 58px;
+            padding: 4px 7px;
+            border-radius: 7px;
+            border: 1px solid var(--color-card-border);
+            background: var(--color-progress-bg);
+            color: var(--color-card-text);
+            font-size: 0.88rem;
+            text-align: right;
+        }
+        .threshold-input:focus { outline: 2px solid var(--color-card-emphasis); }
+        .threshold-unit {
+            font-size: 0.8rem;
+            color: var(--color-card-muted);
+            white-space: nowrap;
+        }
+        .threshold-color-select {
+            padding: 4px 6px;
+            border-radius: 7px;
+            border: 1px solid var(--color-card-border);
+            background: var(--color-progress-bg);
+            color: var(--color-card-text);
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+        .threshold-subsection {
+            padding: 10px 14px 4px;
+            background: var(--color-host-card-bg);
+            border: 1px solid var(--color-card-border);
+            border-radius: 10px;
+            display: grid;
+            gap: 8px;
+        }
+        .threshold-subsection-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--color-card-muted);
+            margin-bottom: 2px;
+        }
+        .threshold-subrow {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 0;
+            border-top: 1px solid var(--color-card-border);
+        }
+        .threshold-subrow:first-of-type { border-top: none; padding-top: 0; }
+        .threshold-reset {
+            margin-top: 12px;
+            text-align: right;
+        }
+        .threshold-reset button {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--color-card-border);
+            background: transparent;
+            color: var(--color-card-muted);
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+        .threshold-reset button:hover { background: var(--color-progress-bg); }
+        /* colour-code the selects after JS sets value */
+        .threshold-color-select[data-val="card-warn"] { color: #b45309; border-color: rgba(251,191,36,0.6); }
+        .threshold-color-select[data-val="card-alert"] { color: #dc2626; border-color: rgba(239,68,68,0.6); }
+        .threshold-color-select[data-val="off"] { color: var(--color-card-muted); }
+        body.theme-dark .threshold-color-select[data-val="card-warn"] { color: #fbbf24; }
+        body.theme-dark .threshold-color-select[data-val="card-alert"] { color: #f87171; }
+
     </style>
 </head>
 <body class="theme-light">
@@ -1032,6 +1135,120 @@
             <div class="modal-section-gap">
                 <p class="widget-section-title">Charts</p>
                 <div class="widget-toggle-list" id="chartToggleList"></div>
+            </div>
+            <div class="modal-section-gap">
+                <p class="widget-section-title">Alert Thresholds</p>
+                <div class="threshold-section">
+
+                    <!-- CPU -->
+                    <div class="threshold-row">
+                        <div class="threshold-label">🧠 CPU
+                            <small>Warn when usage exceeds threshold</small>
+                        </div>
+                        <div class="threshold-input-wrap">
+                            <input class="threshold-input" type="number" min="0" max="100" id="thr-cpu-warn" value="80">
+                            <span class="threshold-unit">%</span>
+                        </div>
+                        <select class="threshold-color-select" id="thr-cpu-color">
+                            <option value="card-warn">ퟫ Amber</option>
+                            <option value="card-alert">ퟫ Red</option>
+                            <option value="off">Off</option>
+                        </select>
+                    </div>
+
+                    <!-- Memory -->
+                    <div class="threshold-row">
+                        <div class="threshold-label">💾 Memory
+                            <small>Warn when usage exceeds threshold</small>
+                        </div>
+                        <div class="threshold-input-wrap">
+                            <input class="threshold-input" type="number" min="0" max="100" id="thr-ram-warn" value="85">
+                            <span class="threshold-unit">%</span>
+                        </div>
+                        <select class="threshold-color-select" id="thr-ram-color">
+                            <option value="card-warn">ퟫ Amber</option>
+                            <option value="card-alert">ퟫ Red</option>
+                            <option value="off">Off</option>
+                        </select>
+                    </div>
+
+                    <!-- Storage -->
+                    <div class="threshold-row">
+                        <div class="threshold-label">💾 Storage
+                            <small>Warn when usage exceeds threshold</small>
+                        </div>
+                        <div class="threshold-input-wrap">
+                            <input class="threshold-input" type="number" min="0" max="100" id="thr-disk-warn" value="85">
+                            <span class="threshold-unit">%</span>
+                        </div>
+                        <select class="threshold-color-select" id="thr-disk-color">
+                            <option value="card-warn">ퟫ Amber</option>
+                            <option value="card-alert">ퟫ Red</option>
+                            <option value="off">Off</option>
+                        </select>
+                    </div>
+
+                    <!-- Uptime (two sub-rules in one block) -->
+                    <div class="threshold-subsection">
+                        <div class="threshold-subsection-title">⏱️ Uptime</div>
+                        <div class="threshold-subrow">
+                            <div class="threshold-label">Recent reboot
+                                <small>Warn if uptime is less than</small>
+                            </div>
+                            <div class="threshold-input-wrap">
+                                <input class="threshold-input" type="number" min="0" id="thr-uptime-reboot-h" value="1">
+                                <span class="threshold-unit">h</span>
+                            </div>
+                            <select class="threshold-color-select" id="thr-uptime-reboot-color">
+                                <option value="card-warn">ퟫ Amber</option>
+                                <option value="card-alert">ퟫ Red</option>
+                                <option value="off">Off</option>
+                            </select>
+                        </div>
+                        <div class="threshold-subrow">
+                            <div class="threshold-label">Long uptime
+                                <small>Alert if uptime exceeds</small>
+                            </div>
+                            <div class="threshold-input-wrap">
+                                <input class="threshold-input" type="number" min="0" id="thr-uptime-long-d" value="25">
+                                <span class="threshold-unit">days</span>
+                            </div>
+                            <select class="threshold-color-select" id="thr-uptime-long-color">
+                                <option value="card-alert">ퟫ Red</option>
+                                <option value="card-warn">ퟫ Amber</option>
+                                <option value="off">Off</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Network -->
+                    <div class="threshold-row threshold-row-2col">
+                        <div class="threshold-label">📡 Network
+                            <small>Warn when no active interface found</small>
+                        </div>
+                        <select class="threshold-color-select" id="thr-network-color">
+                            <option value="card-warn">ퟫ Amber</option>
+                            <option value="card-alert">ퟫ Red</option>
+                            <option value="off">Off</option>
+                        </select>
+                    </div>
+
+                    <!-- Docker -->
+                    <div class="threshold-row threshold-row-2col">
+                        <div class="threshold-label">🐳 Docker
+                            <small>Warn when any container is not running</small>
+                        </div>
+                        <select class="threshold-color-select" id="thr-docker-color">
+                            <option value="card-warn">ퟫ Amber</option>
+                            <option value="card-alert">ퟫ Red</option>
+                            <option value="off">Off</option>
+                        </select>
+                    </div>
+
+                    <div class="threshold-reset">
+                        <button type="button" id="resetThresholds">Reset to defaults</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1858,6 +2075,83 @@
             });
         }
 
+        // ── alert threshold persistence ────────────────────────────────────
+        const LS_THRESHOLDS = 'statix_thresholds';
+        const THR_DEFAULTS = {
+            cpuWarn: 80,    cpuColor: 'card-warn',
+            ramWarn: 85,    ramColor: 'card-warn',
+            diskWarn: 85,   diskColor: 'card-warn',
+            networkColor: 'card-warn',
+            uptimeRebootH: 1,  uptimeRebootColor: 'card-warn',
+            uptimeLongD: 25,   uptimeLongColor: 'card-alert',
+            dockerColor: 'card-warn',
+        };
+
+        function loadThresholds() {
+            try { return Object.assign({}, THR_DEFAULTS, JSON.parse(localStorage.getItem(LS_THRESHOLDS) || '{}')); }
+            catch { return Object.assign({}, THR_DEFAULTS); }
+        }
+
+        function saveThresholds(t) {
+            localStorage.setItem(LS_THRESHOLDS, JSON.stringify(t));
+        }
+
+        function populateThresholdUI(t) {
+            const setV = (id, val) => {
+                const el = document.getElementById(id);
+                el.value = val;
+                el.dataset.val = val;
+            };
+            setV('thr-cpu-warn', t.cpuWarn);
+            setV('thr-cpu-color', t.cpuColor);
+            setV('thr-ram-warn', t.ramWarn);
+            setV('thr-ram-color', t.ramColor);
+            setV('thr-disk-warn', t.diskWarn);
+            setV('thr-disk-color', t.diskColor);
+            setV('thr-network-color', t.networkColor);
+            setV('thr-uptime-reboot-h', t.uptimeRebootH);
+            setV('thr-uptime-reboot-color', t.uptimeRebootColor);
+            setV('thr-uptime-long-d', t.uptimeLongD);
+            setV('thr-uptime-long-color', t.uptimeLongColor);
+            setV('thr-docker-color', t.dockerColor);
+        }
+
+        function readThresholdUI() {
+            const n = id => parseFloat(document.getElementById(id).value);
+            const s = id => document.getElementById(id).value;
+            return {
+                cpuWarn:  n('thr-cpu-warn'),   cpuColor:  s('thr-cpu-color'),
+                ramWarn:  n('thr-ram-warn'),   ramColor:  s('thr-ram-color'),
+                diskWarn: n('thr-disk-warn'),  diskColor: s('thr-disk-color'),
+                networkColor: s('thr-network-color'),
+                uptimeRebootH:     n('thr-uptime-reboot-h'),
+                uptimeRebootColor: s('thr-uptime-reboot-color'),
+                uptimeLongD:       n('thr-uptime-long-d'),
+                uptimeLongColor:   s('thr-uptime-long-color'),
+                dockerColor: s('thr-docker-color'),
+            };
+        }
+
+        // Live-save whenever any threshold input/select changes
+        function initThresholdListeners() {
+            const ids = [
+                'thr-cpu-warn','thr-cpu-color','thr-ram-warn','thr-ram-color',
+                'thr-disk-warn','thr-disk-color','thr-network-color',
+                'thr-uptime-reboot-h','thr-uptime-reboot-color',
+                'thr-uptime-long-d','thr-uptime-long-color','thr-docker-color',
+            ];
+            ids.forEach(id => {
+                document.getElementById(id).addEventListener('change', function() {
+                    if (this.classList.contains('threshold-color-select')) this.dataset.val = this.value;
+                    saveThresholds(readThresholdUI());
+                });
+            });
+            document.getElementById('resetThresholds').addEventListener('click', () => {
+                saveThresholds(Object.assign({}, THR_DEFAULTS));
+                populateThresholdUI(THR_DEFAULTS);
+            });
+        }
+
         function setCardState(widgetId, state) {
             const card = document.querySelector(`[data-widget="${widgetId}"]`);
             if (!card) return;
@@ -2000,34 +2294,43 @@
             renderDockerCard(details.docker || null);
 
             // ── card alert states ──────────────────────────────────────────
-            // CPU ≥ 80%
-            setCardState('cpu-info', cpuPercent !== null && cpuPercent >= 80 ? 'card-warn' : null);
+            const thr = loadThresholds();
 
-            // RAM ≥ 85%
-            setCardState('memory', memoryPercent !== null && memoryPercent >= 85 ? 'card-warn' : null);
+            // CPU
+            setCardState('cpu-info', thr.cpuColor !== 'off' && cpuPercent !== null && cpuPercent >= thr.cpuWarn
+                ? thr.cpuColor : null);
 
-            // Disk ≥ 85%
-            setCardState('storage', diskPercent !== null && diskPercent >= 85 ? 'card-warn' : null);
+            // RAM
+            setCardState('memory', thr.ramColor !== 'off' && memoryPercent !== null && memoryPercent >= thr.ramWarn
+                ? thr.ramColor : null);
 
-            // Network — warn if no active interfaces found
+            // Disk
+            setCardState('storage', thr.diskColor !== 'off' && diskPercent !== null && diskPercent >= thr.diskWarn
+                ? thr.diskColor : null);
+
+            // Network
             const activeIfaces = (details.network && details.network.interfaces) || [];
-            setCardState('network', activeIfaces.length === 0 ? 'card-warn' : null);
+            setCardState('network', thr.networkColor !== 'off' && activeIfaces.length === 0
+                ? thr.networkColor : null);
 
-            // Uptime — warn if < 1 h (recent reboot), alert if > 25 days (needs restart)
+            // Uptime
             const uptimeSeconds = uptime.boot_time ? (Date.now() / 1000 - uptime.boot_time) : null;
             let uptimeState = null;
             if (uptimeSeconds !== null) {
-                if (uptimeSeconds > 25 * 24 * 3600) uptimeState = 'card-alert';
-                else if (uptimeSeconds < 3600)       uptimeState = 'card-warn';
+                if (thr.uptimeLongColor !== 'off' && uptimeSeconds > thr.uptimeLongD * 86400)
+                    uptimeState = thr.uptimeLongColor;
+                else if (thr.uptimeRebootColor !== 'off' && uptimeSeconds < thr.uptimeRebootH * 3600)
+                    uptimeState = thr.uptimeRebootColor;
             }
             setCardState('uptime', uptimeState);
 
-            // Docker — warn if available but any container is not running
+            // Docker
             const dockerData = details.docker || null;
             const dockerAvailable = dockerData && dockerData.available;
             const hasUnhealthyContainer = dockerAvailable &&
                 (dockerData.containers || []).some(c => (c.state || '').toLowerCase() !== 'running');
-            setCardState('docker', hasUnhealthyContainer ? 'card-warn' : null);
+            setCardState('docker', thr.dockerColor !== 'off' && hasUnhealthyContainer
+                ? thr.dockerColor : null);
         }
 
         function hideDetails() {
@@ -2544,10 +2847,12 @@
             customizeBtn.addEventListener('click', () => {
                 buildToggleList(cardsGrid,  cardList,  CARD_WIDGETS,  LS_CARD_HIDDEN);
                 buildToggleList(chartsGrid, chartList, CHART_WIDGETS, LS_CHART_HIDDEN);
+                populateThresholdUI(loadThresholds());
                 widgetModal.classList.remove('hidden');
             });
             closeWidgetModal.addEventListener('click', () => widgetModal.classList.add('hidden'));
             widgetModal.addEventListener('click', e => { if (e.target === widgetModal) widgetModal.classList.add('hidden'); });
+            initThresholdListeners();
         }
 
         initWidgetSystem();
