@@ -2630,7 +2630,7 @@
                 ? thr.networkColor : null);
 
             // Uptime
-            const uptimeSeconds = uptime.boot_time ? (Date.now() / 1000 - uptime.boot_time) : null;
+            const uptimeSeconds = uptime.boot_time ? (Date.now() / 1000 - new Date(uptime.boot_time).getTime() / 1000) : null;
             let uptimeState = null;
             if (uptimeSeconds !== null) {
                 if (thr.uptimeLongColor !== 'off' && uptimeSeconds > thr.uptimeLongD * 86400)
