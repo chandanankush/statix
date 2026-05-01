@@ -169,7 +169,20 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            transition: background 0.4s ease, box-shadow 0.4s ease, color 0.3s ease;
+            transition: background 0.4s ease, box-shadow 0.4s ease, color 0.3s ease, border-color 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .status.host-offline {
+            background: rgba(255, 196, 135, 0.22);
+            border-color: rgba(251, 146, 60, 0.45);
+            box-shadow: 0 4px 24px rgba(255, 161, 25, 0.18);
+        }
+
+        body.theme-dark .status.host-offline {
+            background: rgba(255, 180, 90, 0.12);
+            border-color: rgba(249, 115, 22, 0.45);
+            box-shadow: 0 4px 24px rgba(249, 115, 22, 0.25);
         }
 
         .status-meta {
@@ -2124,6 +2137,7 @@
             if (isOffline && timestamp) offlineHosts.add(effectiveHostname);
             updateOfflineTracking(effectiveHostname, isOffline);
             applyOfflineHighlight(effectiveHostname, offlineHosts);
+            document.querySelector('.status').classList.toggle('host-offline', isOffline && !!timestamp);
         }
 
         async function fetchMetrics() {
