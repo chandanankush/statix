@@ -135,7 +135,6 @@
             align-items: flex-start;
             gap: 12px 20px;
             margin: 0 auto 24px;
-            max-width: 1080px;
             width: 100%;
         }
 
@@ -157,11 +156,10 @@
         }
 
         .filter-actions .ghost-button {
-            min-width: 180px;
+            min-width: 140px;
         }
 
         .status {
-            max-width: 1080px;
             margin: 0 auto 24px;
             background: var(--color-panel-bg);
             backdrop-filter: blur(16px);
@@ -216,8 +214,7 @@
             display: grid;
             grid-template-columns: 1fr;
             gap: 24px;
-            max-width: 1080px;
-            margin: 0 auto 32px;
+            margin: 0 0 32px;
         }
 
         @media (min-width: 768px) {
@@ -294,8 +291,7 @@
         }
 
         .details {
-            max-width: 1080px;
-            margin: 0 auto 32px;
+            margin: 0 0 32px;
         }
 
         .details.hidden {
@@ -684,6 +680,84 @@
         .dot-online  { color: #22c55e; margin-right: 6px; }
         .dot-offline { color: #f97316; margin-right: 6px; }
 
+        /* ── drag & drop ──────────────────────────────────────────────── */
+        .drag-handle {
+            margin-left: auto;
+            cursor: grab;
+            color: var(--color-card-muted);
+            font-size: 1.1rem;
+            opacity: 0.35;
+            padding: 2px 6px;
+            border-radius: 4px;
+            user-select: none;
+            transition: opacity 0.2s ease;
+            line-height: 1;
+        }
+        .drag-handle:hover { opacity: 1; }
+        .card.dragging, .chart-container.dragging { opacity: 0.35; }
+        .card.drag-over   { outline: 2px dashed var(--color-card-emphasis); outline-offset: 2px; }
+        .chart-container.drag-over { outline: 2px dashed var(--color-card-emphasis); outline-offset: 2px; }
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .chart-header h2 { margin: 0; }
+
+        /* ── widget customize modal ───────────────────────────────────── */
+        .widget-section-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--color-card-muted);
+            margin: 0 0 10px;
+        }
+        .widget-toggle-list { display: grid; gap: 8px; }
+        .widget-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: var(--color-host-card-bg);
+            border: 1px solid var(--color-card-border);
+            gap: 12px;
+        }
+        .widget-toggle-label {
+            font-weight: 500;
+            color: var(--color-card-text);
+            font-size: 0.92rem;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 42px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; margin: 0; }
+        .toggle-track {
+            position: absolute;
+            inset: 0;
+            border-radius: 999px;
+            background: var(--color-progress-bg);
+            cursor: pointer;
+            transition: background 0.25s ease;
+        }
+        .toggle-track::before {
+            content: '';
+            position: absolute;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            top: 3px; left: 3px;
+            transition: transform 0.25s ease;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        }
+        .toggle-switch input:checked + .toggle-track { background: var(--color-card-emphasis); }
+        .toggle-switch input:checked + .toggle-track::before { transform: translateX(18px); }
+        .modal-section-gap { margin-top: 16px; }
 
     </style>
 </head>
@@ -721,15 +795,19 @@
             <button id="manageHostsButton" class="ghost-button" type="button" title="Manage hosts">
                 ⚙️ Manage hosts
             </button>
+            <button id="customizeButton" class="ghost-button" type="button" title="Customize dashboard">
+                🎛️ Customize
+            </button>
         </div>
     </section>
 
     <section class="details hidden" id="hostDetailsSection">
         <div class="cards-grid">
-            <article class="card">
+            <article class="card" data-widget="cpu-info">
                 <div class="card-header">
                     <div class="card-icon">🧠</div>
                     <h3>CPU Information</h3>
+                    <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
                     <div class="stat-grid">
@@ -742,10 +820,11 @@
                 </div>
             </article>
 
-            <article class="card">
+            <article class="card" data-widget="memory">
                 <div class="card-header">
                     <div class="card-icon">💾</div>
                     <h3>Memory Usage</h3>
+                    <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
                     <div class="stat-grid">
@@ -758,10 +837,11 @@
                 </div>
             </article>
 
-            <article class="card">
+            <article class="card" data-widget="storage">
                 <div class="card-header">
                     <div class="card-icon">🗄️</div>
                     <h3>Storage Usage</h3>
+                    <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
                     <div class="stat-grid">
@@ -776,10 +856,11 @@
                 </div>
             </article>
 
-            <article class="card">
+            <article class="card" data-widget="system">
                 <div class="card-header">
                     <div class="card-icon">💻</div>
                     <h3>System Information</h3>
+                    <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
                     <div class="stat-grid">
@@ -792,10 +873,11 @@
                 </div>
             </article>
 
-            <article class="card">
+            <article class="card" data-widget="network">
                 <div class="card-header">
                     <div class="card-icon">📡</div>
                     <h3>Network Information</h3>
+                    <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
                     <div class="stat-grid">
@@ -807,10 +889,11 @@
                 </div>
             </article>
 
-            <article class="card">
+            <article class="card" data-widget="uptime">
                 <div class="card-header">
                     <div class="card-icon">⏱️</div>
                     <h3>System Uptime</h3>
+                    <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
                     <div class="uptime-highlight" id="uptimeHuman">—</div>
@@ -819,10 +902,11 @@
                 </div>
             </article>
 
-            <article class="card">
+            <article class="card" data-widget="docker">
                 <div class="card-header">
                     <div class="card-icon">🐳</div>
                     <h3>Docker</h3>
+                    <span class="drag-handle" title="Drag to reorder">⣿</span>
                 </div>
                 <div class="card-body">
                     <div class="stat-grid">
@@ -849,6 +933,23 @@
         </div>
     </div>
 
+    <div class="modal-overlay hidden" id="widgetModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Customize Dashboard</h2>
+                <button type="button" id="closeWidgetModal" class="modal-close" aria-label="Close">✖</button>
+            </div>
+            <div>
+                <p class="widget-section-title">Detail Cards</p>
+                <div class="widget-toggle-list" id="cardToggleList"></div>
+            </div>
+            <div class="modal-section-gap">
+                <p class="widget-section-title">Charts</p>
+                <div class="widget-toggle-list" id="chartToggleList"></div>
+            </div>
+        </div>
+    </div>
+
     <section class="status">
         <div>
             <span class="status-label">Last data received:</span>
@@ -860,20 +961,32 @@
     </section>
 
     <div class="charts-grid">
-        <div class="chart-container">
-            <h2>CPU Usage (%)</h2>
+        <div class="chart-container" data-widget="chart-cpu">
+            <div class="chart-header">
+                <h2>CPU Usage (%)</h2>
+                <span class="drag-handle" title="Drag to reorder">⣿</span>
+            </div>
             <canvas id="cpuChart"></canvas>
         </div>
-        <div class="chart-container">
-            <h2>RAM Usage (%)</h2>
+        <div class="chart-container" data-widget="chart-ram">
+            <div class="chart-header">
+                <h2>RAM Usage (%)</h2>
+                <span class="drag-handle" title="Drag to reorder">⣿</span>
+            </div>
             <canvas id="ramChart"></canvas>
         </div>
-        <div class="chart-container">
-            <h2>Disk I/O (MB/s)</h2>
+        <div class="chart-container" data-widget="chart-disk">
+            <div class="chart-header">
+                <h2>Disk I/O (MB/s)</h2>
+                <span class="drag-handle" title="Drag to reorder">⣿</span>
+            </div>
             <canvas id="diskChart"></canvas>
         </div>
-        <div class="chart-container">
-            <h2>Network I/O (MB/s)</h2>
+        <div class="chart-container" data-widget="chart-net">
+            <div class="chart-header">
+                <h2>Network I/O (MB/s)</h2>
+                <span class="drag-handle" title="Drag to reorder">⣿</span>
+            </div>
             <canvas id="netChart"></canvas>
         </div>
     </div>
@@ -2121,6 +2234,168 @@
         } else {
             fetchMetrics();
         }
+
+        // ── Widget management (order + visibility, persisted to localStorage) ──
+        const CARD_WIDGETS = [
+            { id: 'cpu-info', name: '🧠 CPU Information' },
+            { id: 'memory',   name: '💾 Memory Usage' },
+            { id: 'storage',  name: '🗄️ Storage Usage' },
+            { id: 'system',   name: '💻 System Information' },
+            { id: 'network',  name: '📡 Network Information' },
+            { id: 'uptime',   name: '⏱️ System Uptime' },
+            { id: 'docker',   name: '🐳 Docker' },
+        ];
+        const CHART_WIDGETS = [
+            { id: 'chart-cpu',  name: 'CPU Usage (%)' },
+            { id: 'chart-ram',  name: 'RAM Usage (%)' },
+            { id: 'chart-disk', name: 'Disk I/O (MB/s)' },
+            { id: 'chart-net',  name: 'Network I/O (MB/s)' },
+        ];
+        const LS_CARD_ORDER   = 'statix_card_order';
+        const LS_CARD_HIDDEN  = 'statix_card_hidden';
+        const LS_CHART_ORDER  = 'statix_chart_order';
+        const LS_CHART_HIDDEN = 'statix_chart_hidden';
+
+        function lsLoad(key, fallback) {
+            try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(_) { return fallback; }
+        }
+        function lsSave(key, val) {
+            try { localStorage.setItem(key, JSON.stringify(val)); } catch(_) {}
+        }
+
+        function applyWidgetOrder(grid, registry, storageKey) {
+            const saved = lsLoad(storageKey, null);
+            if (!saved) return;
+            const known = new Set(registry.map(w => w.id));
+            const order = saved.filter(id => known.has(id));
+            registry.forEach(w => { if (!order.includes(w.id)) order.push(w.id); });
+            order.forEach(id => {
+                const el = grid.querySelector('[data-widget="' + id + '"]');
+                if (el) grid.appendChild(el);
+            });
+        }
+
+        function applyWidgetVisibility(grid, storageKey) {
+            const hidden = new Set(lsLoad(storageKey, []));
+            grid.querySelectorAll('[data-widget]').forEach(el => {
+                el.style.display = hidden.has(el.dataset.widget) ? 'none' : '';
+            });
+        }
+
+        function saveWidgetOrder(grid, storageKey) {
+            const order = Array.from(grid.querySelectorAll('[data-widget]')).map(el => el.dataset.widget);
+            lsSave(storageKey, order);
+        }
+
+        function initDragAndDrop(grid, orderKey) {
+            let dragged = null;
+
+            grid.addEventListener('mousedown', e => {
+                const handle = e.target.closest('.drag-handle');
+                if (handle) {
+                    const el = handle.closest('[data-widget]');
+                    if (el) el.setAttribute('draggable', 'true');
+                }
+            });
+
+            grid.addEventListener('dragstart', e => {
+                const el = e.target.closest('[data-widget]');
+                if (!el || el.getAttribute('draggable') !== 'true') { e.preventDefault(); return; }
+                dragged = el;
+                e.dataTransfer.effectAllowed = 'move';
+                requestAnimationFrame(() => el.classList.add('dragging'));
+            });
+
+            grid.addEventListener('dragover', e => {
+                e.preventDefault();
+                const target = e.target.closest('[data-widget]');
+                if (!target || target === dragged) return;
+                grid.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+                target.classList.add('drag-over');
+                const rect = target.getBoundingClientRect();
+                target._insertAfter = e.clientX > rect.left + rect.width / 2;
+            });
+
+            grid.addEventListener('dragleave', e => {
+                if (!grid.contains(e.relatedTarget)) {
+                    grid.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+                }
+            });
+
+            grid.addEventListener('drop', e => {
+                e.preventDefault();
+                const target = e.target.closest('[data-widget]');
+                if (target && target !== dragged && dragged) {
+                    target._insertAfter ? target.after(dragged) : target.before(dragged);
+                    saveWidgetOrder(grid, orderKey);
+                }
+                grid.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+            });
+
+            grid.addEventListener('dragend', () => {
+                if (dragged) { dragged.classList.remove('dragging'); dragged.setAttribute('draggable', 'false'); }
+                dragged = null;
+                grid.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+            });
+        }
+
+        function buildToggleList(container, listEl, registry, hiddenKey) {
+            listEl.innerHTML = '';
+            registry.forEach(widget => {
+                const hidden = new Set(lsLoad(hiddenKey, []));
+                const row = document.createElement('div');
+                row.className = 'widget-toggle-row';
+                const lbl = document.createElement('span');
+                lbl.className = 'widget-toggle-label';
+                lbl.textContent = widget.name;
+                const sw = document.createElement('label');
+                sw.className = 'toggle-switch';
+                const inp = document.createElement('input');
+                inp.type = 'checkbox';
+                inp.checked = !hidden.has(widget.id);
+                inp.setAttribute('aria-label', widget.name);
+                const track = document.createElement('span');
+                track.className = 'toggle-track';
+                sw.append(inp, track);
+                row.append(lbl, sw);
+                listEl.append(row);
+                inp.addEventListener('change', () => {
+                    const h = new Set(lsLoad(hiddenKey, []));
+                    inp.checked ? h.delete(widget.id) : h.add(widget.id);
+                    lsSave(hiddenKey, Array.from(h));
+                    applyWidgetVisibility(container, hiddenKey);
+                });
+            });
+        }
+
+        function initWidgetSystem() {
+            const cardsGrid  = document.querySelector('.cards-grid');
+            const chartsGrid = document.querySelector('.charts-grid');
+
+            applyWidgetOrder(cardsGrid,  CARD_WIDGETS,  LS_CARD_ORDER);
+            applyWidgetOrder(chartsGrid, CHART_WIDGETS, LS_CHART_ORDER);
+            applyWidgetVisibility(cardsGrid,  LS_CARD_HIDDEN);
+            applyWidgetVisibility(chartsGrid, LS_CHART_HIDDEN);
+
+            initDragAndDrop(cardsGrid,  LS_CARD_ORDER);
+            initDragAndDrop(chartsGrid, LS_CHART_ORDER);
+
+            const widgetModal  = document.getElementById('widgetModal');
+            const closeWidgetModal = document.getElementById('closeWidgetModal');
+            const customizeBtn = document.getElementById('customizeButton');
+            const cardList     = document.getElementById('cardToggleList');
+            const chartList    = document.getElementById('chartToggleList');
+
+            customizeBtn.addEventListener('click', () => {
+                buildToggleList(cardsGrid,  cardList,  CARD_WIDGETS,  LS_CARD_HIDDEN);
+                buildToggleList(chartsGrid, chartList, CHART_WIDGETS, LS_CHART_HIDDEN);
+                widgetModal.classList.remove('hidden');
+            });
+            closeWidgetModal.addEventListener('click', () => widgetModal.classList.add('hidden'));
+            widgetModal.addEventListener('click', e => { if (e.target === widgetModal) widgetModal.classList.add('hidden'); });
+        }
+
+        initWidgetSystem();
 
         loadHosts();
         setInterval(fetchMetrics, 1000);
