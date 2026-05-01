@@ -120,8 +120,8 @@ _read_existing_config() {
     else
         local unit="$HOME/.config/systemd/user/system-stats-forwarder.service"
         if [[ -f "$unit" ]]; then
-            local raw_url; raw_url=$(grep 'MONITORING_SERVER_METRICS_URL=' "$unit" | cut -d= -f2-)
-            local raw_int; raw_int=$(grep 'SYSTEM_STATS_FORWARD_INTERVAL='    "$unit" | cut -d= -f2-)
+            local raw_url; raw_url=$(grep 'MONITORING_SERVER_METRICS_URL=' "$unit" | cut -d= -f3-)
+            local raw_int; raw_int=$(grep 'SYSTEM_STATS_FORWARD_INTERVAL='    "$unit" | cut -d= -f3-)
             [[ -n "$raw_url" ]] && echo "url=${raw_url%/metrics}"
             [[ -n "$raw_int" ]] && echo "interval=${raw_int}"
         fi
