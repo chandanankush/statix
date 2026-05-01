@@ -165,6 +165,8 @@ system-stats-forwarder  # polls :5001 → monitoring server
 | Problem | Fix |
 |---|---|
 | `externally-managed-environment` error | Use the installer script — it creates its own venv automatically. |
+| `Permission denied` creating `~/.local` | A previous `sudo` run left `~/.local` owned by root. Fix: `sudo chown -R $(whoami):$(whoami) ~/.local` then re-run the installer. |
+| `bash: /dev/fd/63: No such file or directory` when using `sudo bash <(curl ...)` | Do not use `sudo`. The installer runs as your normal user. Use the pipe form instead: `curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh \| bash` |
 | Service not starting on Raspberry Pi after reboot | Run `sudo loginctl enable-linger $(whoami)` so systemd user services survive without an active login session. |
 | Disk metrics show wrong mount | Set `SYSTEM_STATS_DISK_PATH` to the mount you want to track. |
 | Forwarder can't reach the monitoring server | Check the server URL and that port `5050` is reachable from this host. |

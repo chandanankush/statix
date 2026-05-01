@@ -10,6 +10,21 @@
 #
 set -euo pipefail
 
+# ── root guard ───────────────────────────────────────────────────────────────
+# The installer writes into $HOME — running as root installs to /root, not the
+# target user's home. Using 'sudo bash <(curl ...)' also breaks process
+# substitution on many Linux systems (/dev/fd not available).
+# Use the pipe form instead: curl -fsSL ... | bash -s -- [options]
+if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    echo -e "\033[0;31m[✗]\033[0m Do not run this installer as root or with sudo."
+    echo    "    It installs into your user home directory and manages user services."
+    echo    "    Run as your normal user:"
+    echo    "      bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)"
+    echo    "    Or, if <(...) fails on your system:"
+    echo    "      curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh | bash"
+    exit 1
+fi
+
 GITHUB_REPO="chandanankush/statix"
 GITHUB_BRANCH="main"
 PACKAGE_URL="git+https://github.com/${GITHUB_REPO}.git@${GITHUB_BRANCH}#subdirectory=client"
@@ -176,7 +191,14 @@ if ! "$PYTHON" -m venv --help &>/dev/null 2>&1; then
     fi
 fi
 
-mkdir -p "$(dirname "$VENV_DIR")"
+# Create the parent directory — if this fails, ~/.local is likely owned by root
+# from a previous 'sudo' run. Tell the user exactly how to fix it.
+if ! mkdir -p "$(dirname "$VENV_DIR")" 2>/dev/null; then
+    die "Cannot create $(dirname "$VENV_DIR") — directory is probably owned by root.
+    Fix it by running:
+      sudo chown -R \$(whoami):\$(whoami) \"$HOME/.local\"
+    Then re-run this installer."
+fi
 # create venv only on fresh install; on upgrade reuse the existing one
 if [[ ! -d "$VENV_DIR" ]]; then
     "$PYTHON" -m venv "$VENV_DIR"
