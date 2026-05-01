@@ -39,7 +39,16 @@ def _human_readable_duration(seconds: int) -> str:
     return " ".join(parts)
 
 
+# ── hardware model (never changes at runtime — detect once) ──────────────────
+_hardware_model_fetched: bool = False
+_hardware_model_value: Optional[str] = None
+
+
 def _detect_hardware_model(system_name: str) -> Optional[str]:
+    global _hardware_model_fetched, _hardware_model_value
+    if _hardware_model_fetched:
+        return _hardware_model_value
+    _hardware_model_fetched = True
     try:
         if system_name == "Darwin":
             result = subprocess.run(
@@ -48,20 +57,21 @@ def _detect_hardware_model(system_name: str) -> Optional[str]:
                 text=True,
                 check=True,
             )
-            return result.stdout.strip() or None
-        if system_name == "Linux":
+            _hardware_model_value = result.stdout.strip() or None
+        elif system_name == "Linux":
             # Raspberry Pi — device tree (arm/arm64, no DMI)
             dt_model = Path("/proc/device-tree/model")
             if dt_model.exists():
                 val = dt_model.read_text(encoding="utf-8", errors="ignore").rstrip("\x00").strip()
-                return val or None
-            # x86 / generic Linux — DMI product name
-            dmi_path = Path("/sys/devices/virtual/dmi/id/product_name")
-            if dmi_path.exists():
-                return dmi_path.read_text(encoding="utf-8", errors="ignore").strip() or None
+                _hardware_model_value = val or None
+            else:
+                # x86 / generic Linux — DMI product name
+                dmi_path = Path("/sys/devices/virtual/dmi/id/product_name")
+                if dmi_path.exists():
+                    _hardware_model_value = dmi_path.read_text(encoding="utf-8", errors="ignore").strip() or None
     except Exception:  # pragma: no cover - best effort hardware detection
-        return None
-    return None
+        pass
+    return _hardware_model_value
 
 
 def _macos_link_speed_mbps(iface_name: str) -> Optional[float]:
@@ -146,40 +156,21 @@ def _linux_wifi_speed_mbps(iface_name: str) -> Optional[float]:
 
 
 def _primary_network_interface() -> Optional[Dict[str, Any]]:
-    stats = psutil.net_if_stats()
-    addrs = psutil.net_if_addrs()
-
-    duplex_map = {
-        getattr(psutil, "NIC_DUPLEX_FULL", 2): "full",
-        getattr(psutil, "NIC_DUPLEX_HALF", 1): "half",
-        getattr(psutil, "NIC_DUPLEX_UNKNOWN", 0): "unknown",
-    }
-
-    for name, stat in stats.items():
-        if not stat.isup or name.lower().startswith("lo"):
-            continue
-        inet_info = next((addr for addr in addrs.get(name, []) if addr.family == socket.AF_INET), None)
-        if not inet_info:
-            continue
-        speed = stat.speed if stat.speed and stat.speed > 0 else None
-        if speed is None and platform.system() == "Darwin":
-            speed = _macos_link_speed_mbps(name)
-        elif speed is None and platform.system() == "Linux":
-            speed = _linux_wifi_speed_mbps(name)
-        return {
-            "name": name,
-            "ipv4": inet_info.address,
-            "netmask": inet_info.netmask,
-            "broadcast": getattr(inet_info, "broadcast", None),
-            "speed_mbps": speed,
-            "mtu": stat.mtu,
-            "duplex": duplex_map.get(stat.duplex, "unknown"),
-        }
-    return None
+    """Return the first active interface. Delegates to _all_network_interfaces()."""
+    ifaces = _all_network_interfaces()
+    return ifaces[0] if ifaces else None
 
 
 def _all_network_interfaces() -> List[Dict[str, Any]]:
-    """Return all active (up, non-loopback) interfaces that have an IPv4 address."""
+    """Return all active (up, non-loopback) interfaces with an IPv4 address.
+
+    Result is cached for 5 minutes.  Speed detection (ifconfig / system_profiler
+    / iw) is only run at cache-miss time, not on every 30-second cycle.
+    """
+    cached = _cache_get("network_interfaces", ttl=_SPEED_CACHE_TTL)
+    if cached is not _MISS:
+        return cached  # type: ignore[return-value]
+
     stats = psutil.net_if_stats()
     addrs = psutil.net_if_addrs()
     duplex_map = {
@@ -188,6 +179,7 @@ def _all_network_interfaces() -> List[Dict[str, Any]]:
         getattr(psutil, "NIC_DUPLEX_UNKNOWN", 0): "unknown",
     }
     interfaces: List[Dict[str, Any]] = []
+    sys_name = platform.system()
     for name, stat in stats.items():
         if not stat.isup or name.lower().startswith("lo"):
             continue
@@ -195,9 +187,9 @@ def _all_network_interfaces() -> List[Dict[str, Any]]:
         if not inet_info:
             continue
         speed = stat.speed if stat.speed and stat.speed > 0 else None
-        if speed is None and platform.system() == "Darwin":
+        if speed is None and sys_name == "Darwin":
             speed = _macos_link_speed_mbps(name)
-        elif speed is None and platform.system() == "Linux":
+        elif speed is None and sys_name == "Linux":
             speed = _linux_wifi_speed_mbps(name)
         interfaces.append({
             "name": name,
@@ -208,7 +200,7 @@ def _all_network_interfaces() -> List[Dict[str, Any]]:
             "mtu": stat.mtu,
             "duplex": duplex_map.get(stat.duplex, "unknown"),
         })
-    return interfaces
+    return _cache_set("network_interfaces", interfaces)
 
 
 def _resolve_root_path() -> Path:
@@ -228,13 +220,14 @@ _DOCKER_FALLBACK_PATHS = (
 
 # ── update-check cache (TTL = 24 h) ──────────────────────────────────────────
 _UPDATE_CACHE_TTL: int = 24 * 3600  # seconds
+_SPEED_CACHE_TTL: int = 5 * 60      # 5 minutes — WiFi TX rate changes gradually
 _update_cache: Dict[str, Any] = {}  # key → {"value": ..., "ts": float}
 
 
-def _cache_get(key: str) -> Any:
+def _cache_get(key: str, ttl: int = _UPDATE_CACHE_TTL) -> Any:
     """Return cached value if still within TTL, otherwise sentinel _MISS."""
     entry = _update_cache.get(key)
-    if entry and (time.time() - entry["ts"]) < _UPDATE_CACHE_TTL:
+    if entry and (time.time() - entry["ts"]) < ttl:
         return entry["value"]
     return _MISS
 
@@ -413,8 +406,8 @@ def collect_system_metrics() -> Dict[str, Any]:
     disk_io = _as_dict(psutil.disk_io_counters())
 
     net_io = _as_dict(psutil.net_io_counters())
-    primary_interface = _primary_network_interface()
     all_interfaces = _all_network_interfaces()
+    primary_interface = all_interfaces[0] if all_interfaces else None
 
     boot_timestamp = psutil.boot_time()
     boot_time = dt.datetime.fromtimestamp(boot_timestamp, tz=dt.timezone.utc).astimezone()
