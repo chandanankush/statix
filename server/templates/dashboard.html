@@ -783,6 +783,16 @@
     <script>
         const timeframePresets = {{ timeframe_presets | tojson }};
         const defaultTimeframe = "{{ default_timeframe }}";
+        const AUTH_REQUIRED = {{ 'true' if auth_required else 'false' }};
+        let _apiToken = null;
+
+        function getAuthHeaders() {
+            if (!AUTH_REQUIRED) return {};
+            if (!_apiToken) {
+                _apiToken = prompt('Enter API key to perform this action:');
+            }
+            return _apiToken ? { 'Authorization': `Bearer ${_apiToken}` } : {};
+        }
 
         const hostnameFilter = document.getElementById('hostnameFilter');
         const timeframeFilter = document.getElementById('timeframeFilter');
@@ -1595,10 +1605,20 @@
                 if (isOffline) {
                     card.classList.add('offline');
                 }
-                meta.innerHTML = `<strong>${host.hostname}</strong>
-                    <span>Metrics stored: ${host.metric_count}</span>
-                    <span>Last seen: ${lastSeenText}${isOffline ? ' (offline)' : ''}</span>
-                    <span>Details updated: ${detailsUpdated}</span>`;
+
+                // Build meta content with DOM APIs (no innerHTML) to prevent XSS
+                const nameEl = document.createElement('strong');
+                nameEl.textContent = host.hostname;
+                const countEl = document.createElement('span');
+                countEl.textContent = `Metrics stored: ${host.metric_count}`;
+                const lastSeenEl = document.createElement('span');
+                lastSeenEl.textContent = `Last seen: ${lastSeenText}${isOffline ? ' (offline)' : ''}`;
+                const detailsEl = document.createElement('span');
+                detailsEl.textContent = `Details updated: ${detailsUpdated}`;
+                meta.appendChild(nameEl);
+                meta.appendChild(countEl);
+                meta.appendChild(lastSeenEl);
+                meta.appendChild(detailsEl);
 
                 const actions = document.createElement('div');
                 actions.className = 'host-actions';
@@ -1631,8 +1651,13 @@
             try {
                 const response = await fetch(`/hosts/${encodeURIComponent(hostname)}/clean`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 });
+                if (response.status === 401) {
+                    _apiToken = null;
+                    alert('Invalid API key.');
+                    return;
+                }
                 if (!response.ok) {
                     throw new Error(`Request failed: ${response.status}`);
                 }
@@ -1651,7 +1676,13 @@
             try {
                 const response = await fetch(`/hosts/${encodeURIComponent(hostname)}`, {
                     method: 'DELETE',
+                    headers: { ...getAuthHeaders() },
                 });
+                if (response.status === 401) {
+                    _apiToken = null;
+                    alert('Invalid API key.');
+                    return;
+                }
                 if (!response.ok) {
                     throw new Error(`Request failed: ${response.status}`);
                 }

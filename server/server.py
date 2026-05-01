@@ -1,4 +1,5 @@
 """Flask-based monitoring server that stores metrics and serves a simple dashboard."""
+import functools
 import json
 import logging
 import os
@@ -20,8 +21,60 @@ TIMEFRAME_PRESETS: Dict[str, int] = {
     "7d": 7 * 24 * 60 * 60,
 }
 
+# ── security constants ────────────────────────────────────────────────────────
+# Set STATIX_API_KEY env var to require a bearer token on write/delete endpoints.
+# Leave unset (or empty) to disable auth (trusted-network deployments).
+API_KEY: Optional[str] = os.getenv("STATIX_API_KEY") or None
+
+# Maximum accepted Content-Length for POST /metrics (bytes). Default 512 KB.
+MAX_CONTENT_LENGTH: int = int(os.getenv("STATIX_MAX_CONTENT_LENGTH", str(512 * 1024)))
+
+# Maximum length of any hostname string accepted from clients.
+MAX_HOSTNAME_LEN: int = 253  # DNS max hostname length
+
+# Maximum size of the stored details_json blob (bytes). Default 64 KB.
+MAX_DETAILS_BYTES: int = int(os.getenv("STATIX_MAX_DETAILS_BYTES", str(64 * 1024)))
+
+# Simple in-process rate limiter: max requests per IP per window.
+RATE_LIMIT_REQUESTS: int = int(os.getenv("STATIX_RATE_LIMIT", "60"))
+RATE_LIMIT_WINDOW: int = 60  # seconds
+_rate_buckets: Dict[str, List[float]] = {}
+
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
+# ── auth & rate-limit decorators ──────────────────────────────────────────────
+def _require_api_key(f):
+    """Decorator: reject requests that don't supply the correct bearer token.
+    Only active when STATIX_API_KEY env var is set."""
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        if API_KEY is None:
+            return f(*args, **kwargs)
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer ") or auth_header[7:] != API_KEY:
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def _rate_limit(f):
+    """Decorator: limit RATE_LIMIT_REQUESTS calls per IP per RATE_LIMIT_WINDOW seconds."""
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        ip = request.remote_addr or "unknown"
+        now = time.time()
+        window_start = now - RATE_LIMIT_WINDOW
+        timestamps = _rate_buckets.get(ip, [])
+        timestamps = [t for t in timestamps if t > window_start]
+        if len(timestamps) >= RATE_LIMIT_REQUESTS:
+            return jsonify({"error": "Rate limit exceeded"}), 429
+        timestamps.append(now)
+        _rate_buckets[ip] = timestamps
+        return f(*args, **kwargs)
+    return wrapper
 
 
 def ensure_database() -> None:
@@ -95,6 +148,9 @@ def insert_metric(payload: Dict[str, float]) -> None:
 
 def upsert_host_details(hostname: str, details: Dict[str, Any]) -> None:
     serialized = json.dumps(details)
+    if len(serialized.encode()) > MAX_DETAILS_BYTES:
+        logging.warning("details payload for %s exceeds size limit (%d bytes), skipping", hostname, len(serialized.encode()))
+        return
     now_ts = int(time.time())
     with closing(open_connection()) as conn:
         conn.execute(
@@ -222,6 +278,7 @@ def get_host_details(hostname: str) -> Optional[Dict[str, Any]]:
 
 
 @app.route("/metrics", methods=["POST"])
+@_rate_limit
 def receive_metrics():
     payload = request.get_json(silent=True)
     if not payload:
@@ -233,9 +290,12 @@ def receive_metrics():
         return jsonify({"error": f"Missing fields: {', '.join(sorted(missing))}"}), 400
 
     try:
+        hostname = str(payload["hostname"])
+        if not hostname or len(hostname) > MAX_HOSTNAME_LEN:
+            return jsonify({"error": f"Invalid hostname (max {MAX_HOSTNAME_LEN} chars)"}), 400
         timestamp = int(payload["timestamp"])
         metric = {
-            "hostname": str(payload["hostname"]),
+            "hostname": hostname,
             "cpu": float(payload["cpu"]),
             "ram": float(payload["ram"]),
             "disk": float(payload["disk"]),
@@ -243,8 +303,8 @@ def receive_metrics():
             "disk_read": float(payload.get("disk_read", 0.0)),
             "disk_write": float(payload.get("disk_write", 0.0)),
         }
-    except (TypeError, ValueError) as exc:
-        logging.warning("Invalid metric payload: %s", exc)
+    except (TypeError, ValueError):
+        logging.warning("Invalid metric payload from %s: bad field types", request.remote_addr)
         return jsonify({"error": "Invalid field types"}), 400
 
     insert_metric(metric)
@@ -299,12 +359,14 @@ def hosts_endpoint():
 
 
 @app.route("/hosts/<hostname>/clean", methods=["POST"])
+@_require_api_key
 def clean_host(hostname: str):
     removed = delete_host_metrics(hostname)
     return jsonify({"status": "ok", "metrics_deleted": removed})
 
 
 @app.route("/hosts/<hostname>", methods=["DELETE"])
+@_require_api_key
 def delete_host_endpoint(hostname: str):
     outcome = delete_host(hostname)
     return jsonify({"status": "ok", **outcome})
@@ -318,6 +380,7 @@ def dashboard():
         hostnames=hostnames,
         timeframe_presets=TIMEFRAME_PRESETS,
         default_timeframe="1h",
+        auth_required=(API_KEY is not None),
     )
 
 
@@ -328,6 +391,6 @@ def health():
 
 if __name__ == "__main__":
     ensure_database()
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=False)
 else:
     ensure_database()
