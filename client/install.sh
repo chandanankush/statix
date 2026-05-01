@@ -139,8 +139,16 @@ fi
 VENV_DIR="$HOME/.local/share/statix/venv"
 IS_UPGRADE=false
 if [[ -x "$VENV_DIR/bin/system-stats-service" ]]; then
-    IS_UPGRADE=true
-    warn "Existing installation detected — will upgrade."
+    # Verify the venv is actually healthy (all dependencies installed).
+    # A broken venv (e.g. from a previous --no-deps install) is treated as a
+    # fresh install so pip reinstalls all dependencies from scratch.
+    if "$VENV_DIR/bin/python" -c "import fastapi, uvicorn, psutil" 2>/dev/null; then
+        IS_UPGRADE=true
+        warn "Existing installation detected — will upgrade."
+    else
+        warn "Existing installation detected but venv is broken — rebuilding from scratch."
+        rm -rf "$VENV_DIR"
+    fi
 fi
 
 # Read saved config from existing service files so re-runs keep the same settings
