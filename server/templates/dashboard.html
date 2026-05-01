@@ -159,6 +159,11 @@
             min-width: 140px;
         }
 
+        /* ── base: ensure no element causes horizontal overflow ─────── */
+        img, canvas, video, iframe, table {
+            max-width: 100%;
+        }
+
         .status {
             margin: 0 0 24px;
             background: var(--color-panel-bg);
@@ -238,7 +243,7 @@
             margin: 0 0 32px;
         }
 
-        @media (min-width: 768px) {
+        @media (min-width: 901px) {
             .charts-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
@@ -267,6 +272,8 @@
         }
 
         select {
+            font-family: inherit;
+            font-size: 16px;
             padding: 8px 14px;
             border-radius: 10px;
             border: 1px solid var(--color-input-border);
@@ -322,7 +329,7 @@
         .cards-grid {
             display: grid;
             gap: 20px;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
         }
 
         .card {
@@ -496,11 +503,12 @@
             justify-content: space-between;
             align-items: center;
             position: sticky;
-            top: 0;
-            z-index: 1;
+            top: -28px;
+            z-index: 10;
             background: var(--color-modal-bg);
-            margin: -4px -4px 0;
-            padding: 4px 4px 12px;
+            margin: -28px -28px 0;
+            padding: 28px 28px 12px;
+            border-bottom: 1px solid var(--color-card-border);
         }
 
         .modal-header h2 {
@@ -617,38 +625,71 @@
                 padding: 0 16px 40px;
             }
 
+            header {
+                padding: 20px 0 12px;
+            }
+
+            header h1 {
+                font-size: 1.6rem;
+            }
+
             .filters {
                 flex-direction: column;
                 align-items: stretch;
             }
 
-            .filter-control,
-            .filter-actions {
+            /* override base min-width/flex with higher specificity */
+            .filter-control {
+                flex: 1 1 auto;
+                min-width: 0;
                 width: 100%;
-                min-width: unset;
             }
 
-            .ghost-button {
+            .filter-actions {
                 width: 100%;
+                min-width: 0;
+                flex: unset;
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            /* use !important only here to beat .filter-actions .ghost-button specificity */
+            .ghost-button,
+            .filter-actions .ghost-button {
+                width: 100%;
+                min-width: 0 !important;
                 text-align: center;
+                box-sizing: border-box;
             }
 
             .status {
-                padding: 18px 20px;
+                padding: 14px 16px;
             }
 
             .chart-container {
-                padding: 18px 20px;
+                padding: 16px;
+            }
+
+            .card {
+                padding: 18px 16px;
             }
         }
 
         @media (max-width: 520px) {
+            body {
+                padding: 0 12px 32px;
+            }
+
             header p {
-                font-size: 0.95rem;
+                font-size: 0.9rem;
             }
 
             canvas {
-                max-height: 260px;
+                max-height: 240px;
+            }
+
+            .status-hostlist {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -1003,6 +1044,114 @@
         body.theme-dark .threshold-color-select[data-val="card-green"]  { color: #4ade80; }
         body.theme-dark .threshold-color-select[data-val="card-purple"] { color: #c084fc; }
 
+        /* ── tablet layout (769 – 1024 px) ──────────────────────────── */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            body {
+                padding: 0 24px 48px;
+            }
+
+            .filter-control {
+                flex: 1 1 200px;
+                min-width: 0;
+            }
+        }
+
+        /* ── mobile (≤ 768 px): touch targets, modal, host-card stacking */
+        @media (max-width: 768px) {
+            .uptime-highlight {
+                font-size: 1.8rem;
+            }
+
+            /* host card in manage-hosts modal: stack vertically */
+            .host-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .host-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            /* touch-friendly minimum tap targets */
+            .ghost-button,
+            .filter-actions .ghost-button,
+            .btn-secondary,
+            .btn-danger {
+                min-height: 44px;
+            }
+
+            select {
+                min-height: 44px;
+            }
+
+            .modal-close {
+                min-height: 44px;
+                min-width: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+
+        /* ── phone (≤ 599 px) ────────────────────────────────────────── */
+        @media (max-width: 599px) {
+            /* single-column card grid */
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* allow long stat-values to wrap beneath their label */
+            .stat-row {
+                flex-wrap: wrap;
+                gap: 2px 8px;
+            }
+
+            .stat-value {
+                text-align: left;
+            }
+
+            /* docker container items: wrap badge below name */
+            .docker-container-item {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            /* threshold rows: stack inputs below label */
+            .threshold-row,
+            .threshold-row.threshold-row-2col {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .threshold-subrow {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .threshold-input-wrap,
+            .threshold-color-wrap {
+                justify-content: flex-start;
+            }
+
+            /* modal: use more of the screen height */
+            .modal {
+                max-height: 95vh;
+                padding: 20px 16px;
+            }
+
+            .modal-header {
+                margin: -20px -16px 0;
+                padding: 20px 16px 12px;
+                top: -20px;
+            }
+
+            .modal-header h2 {
+                font-size: 1.15rem;
+            }
+        }
+
     </style>
 </head>
 <body class="theme-light">
@@ -1027,7 +1176,7 @@
                 <option value="">All Data</option>
                 {% for key, seconds in timeframe_presets.items() %}
                 <option value="{{ key }}" {% if key == default_timeframe %}selected{% endif %}>
-                    Last {{ key }}
+                    {{ timeframe_labels[key] }}
                 </option>
                 {% endfor %}
             </select>

@@ -18,9 +18,22 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = BASE_DIR / "data" / "metrics.db"
 DB_PATH = os.getenv("DATABASE_PATH", str(DEFAULT_DB_PATH))
 TIMEFRAME_PRESETS: Dict[str, int] = {
+    "15m": 15 * 60,
+    "30m": 30 * 60,
     "1h": 60 * 60,
+    "3h": 3 * 60 * 60,
+    "6h": 6 * 60 * 60,
     "24h": 24 * 60 * 60,
     "7d": 7 * 24 * 60 * 60,
+}
+TIMEFRAME_LABELS: Dict[str, str] = {
+    "15m": "Last 15 minutes",
+    "30m": "Last 30 minutes",
+    "1h": "Last 1 hour",
+    "3h": "Last 3 hours",
+    "6h": "Last 6 hours",
+    "24h": "Last 24 hours",
+    "7d": "Last 7 days",
 }
 
 # ── security constants ────────────────────────────────────────────────────────
@@ -474,6 +487,7 @@ def dashboard():
         "dashboard.html",
         hostnames=hostnames,
         timeframe_presets=TIMEFRAME_PRESETS,
+        timeframe_labels=TIMEFRAME_LABELS,
         default_timeframe="1h",
         auth_required=(API_KEY is not None),
     )
