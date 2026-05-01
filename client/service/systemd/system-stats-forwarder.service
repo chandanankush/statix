@@ -1,0 +1,18 @@
+[Unit]
+Description=System Stats Forwarder
+After=network-online.target system-stats-service.service
+Wants=network-online.target
+Requires=system-stats-service.service
+
+[Service]
+Type=simple
+Environment=SYSTEM_STATS_URL=http://127.0.0.1:5001/system
+Environment=MONITORING_SERVER_METRICS_URL=http://YOUR_SERVER:5050/metrics
+Environment=SYSTEM_STATS_FORWARD_INTERVAL=30
+Environment=SYSTEM_STATS_FORWARD_LOG_LEVEL=INFO
+ExecStart=/usr/local/bin/system-stats-forwarder
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

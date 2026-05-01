@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.local.systemstats.forwarder</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/local/bin/system-stats-forwarder</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>SYSTEM_STATS_URL</key>
+      <string>http://127.0.0.1:5001/system</string>
+      <key>MONITORING_SERVER_METRICS_URL</key>
+      <string>http://127.0.0.1:5050/metrics</string>
+      <key>SYSTEM_STATS_FORWARD_INTERVAL</key>
+      <string>30</string>
+      <key>SYSTEM_STATS_FORWARD_LOG_LEVEL</key>
+      <string>INFO</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/system-stats-forwarder.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/system-stats-forwarder.log</string>
+  </dict>
+</plist>
