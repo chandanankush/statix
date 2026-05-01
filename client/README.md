@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/in
 1. Detects your platform (macOS → launchd, Linux → systemd).
 2. Checks for Python 3.9+ and installs it via `apt` on Raspberry Pi if missing.
 3. Creates an isolated venv at `~/.local/share/statix/venv` — no system Python is touched.
-4. Installs the package directly from this GitHub repo.
+4. Installs the package directly from this GitHub repo and records the installed git SHA to `~/.local/share/statix/client_version` (used by the dashboard for version tracking).
 5. Registers and starts two persistent background services:
    - **system-stats-service** — the FastAPI daemon on `127.0.0.1:5001`
    - **system-stats-forwarder** — polls `/system` every N seconds and POSTs to the monitoring server
@@ -138,15 +138,18 @@ Returns a full snapshot of the host. Example response:
         "update_available": false
       }
     ]
-  }
+  },
+  "statix_client_version": "a1b2c3d"
 }
 ```
 
 **Notes:**
-- `cpu.temperature_c` — `null` on Apple Silicon or when no sensor is readable. On Raspberry Pi and Linux this is always populated. On macOS Intel install `brew install osx-cpu-temp` to enable it.
+- `cpu.temperature_c` — `null` on Apple Silicon or when no sensor is readable. On Raspberry Pi, reads `psutil.sensors_temperatures()` first; if that returns nothing (e.g. in a restricted systemd user service), falls back to `/sys/class/thermal/thermal_zone0/temp`. On macOS Intel install `brew install osx-cpu-temp` to enable it.
 - `network.interfaces` — all active (up, non-loopback, IPv4) interfaces. Entire list is cached for 5 minutes.
-- `system.os_update` — cached 24 h. `count` is the number of pending updates; `source` is `softwareupdate` (macOS), `apt` (Debian/RPi), or `dnf`/`yum`.
-- `docker[].update_available` — `true` if a newer image exists on the registry, `false` if up to date, `null` if the check failed or Docker 24+ is not available. Cached 24 h per image.
+- `system.os_update` — cached 24 h. `count` is the number of pending updates; `source` is `softwareupdate` (macOS), `apt` (Debian/RPi via `apt list --upgradable`), or `dnf`/`yum`.
+- `statix_client_version` — short git SHA of the installed commit (written by the installer to `~/.local/share/statix/client_version`). Falls back to `"dev"` when running from source. Used by the dashboard to detect stale clients.
+
+---
 
 ### `GET /health`
 ```json
@@ -202,4 +205,6 @@ system-stats-forwarder  # polls :5001 → monitoring server
 | Service not starting on Raspberry Pi after reboot | Run `sudo loginctl enable-linger $(whoami)` so systemd user services survive without an active login session. |
 | Disk metrics show wrong mount | Set `SYSTEM_STATS_DISK_PATH` to the mount you want to track. |
 | Forwarder can't reach the monitoring server | Check the server URL and that port `5050` is reachable from this host. |
+| Dashboard shows "version mismatch" warning for this host | Re-run the installer (`bash <(curl ...)`) to reinstall the latest client. The installer records the new git SHA automatically. |
+| `statix_client_version` shows `dev` | You installed the package manually (`pip install .`) instead of using the installer. Run the installer once to write the version file, or run `git rev-parse --short HEAD > ~/.local/share/statix/client_version` after a manual install. |
 | LibreSSL warnings on macOS | Install Python via Homebrew (`brew install python`) instead of the system Python. |

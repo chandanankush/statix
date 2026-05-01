@@ -134,7 +134,7 @@ docker run -d \
 | `POST` | `/hosts/<hostname>/clean` | **Yes** | Delete metric history for a host (keeps host_details). |
 | `DELETE` | `/hosts/<hostname>` | **Yes** | Remove a host and all its data entirely. |
 | `GET` | `/dashboard` | No | Chart.js dashboard UI. |
-| `GET` | `/health` | No | Health check — returns `{"status": "ok"}`. |
+| `GET` | `/health` | No | Health check — returns `{"status": "ok", "version": "<sha>", "expected_client_version": "<sha>"}`. |
 
 "Auth required" applies only when `STATIX_API_KEY` is set. Pass the token as:
 ```
@@ -147,15 +147,22 @@ Authorization: Bearer <your-key>
 
 The image is automatically built and pushed to Docker Hub on every push to `main` that touches `server/**`, via `.github/workflows/docker-publish.yml`. Images are built for both `linux/amd64` and `linux/arm64`.
 
+Each build bakes the git commit SHA into the image as environment variables via a `GIT_SHA` build arg:
+- `STATIX_SERVER_VERSION` — the SHA of the server build
+- `STATIX_EXPECTED_CLIENT_VERSION` — the SHA the dashboard expects the client to be on (same commit, same repo)
+
+The dashboard reads these at startup via `/health` and shows a yellow warning banner if a connected client is on a different SHA. No manual version bumping is needed — every commit changes the SHA automatically.
+
+To build locally and pass the SHA:
+```sh
+cd server
+docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t statix-local .
+```
+Omitting `--build-arg` leaves both env vars as `"dev"`, so a local build paired with a locally-installed client (also showing `"dev"`) will not trigger a mismatch warning.
+
 Tags:
 - `midnightappcoder/statix:latest` — most recent `main` build
-- `midnightappcoder/statix:1.0.1` — current stable release
 - `midnightappcoder/statix:<git-sha>` — immutable per-commit tag
-
-Pull a specific version:
-```sh
-docker pull midnightappcoder/statix:1.0.1
-```
 
 ### One-time Docker Hub secrets setup (repo owner)
 

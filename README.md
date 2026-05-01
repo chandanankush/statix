@@ -1,7 +1,7 @@
 # Monitoring Stack
 
 [![Docker Hub](https://img.shields.io/docker/v/midnightappcoder/statix?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/midnightappcoder/statix)
-[![Latest](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/chandanankush/statix)
+[![CI](https://github.com/chandanankush/statix/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/chandanankush/statix/actions/workflows/docker-publish.yml)
 
 A self-hosted system monitoring stack. The agent (FastAPI + psutil) runs natively on each host (macOS, Raspberry Pi). The server (Flask + SQLite) runs in Docker and is published to Docker Hub as `midnightappcoder/statix`.
 
@@ -13,7 +13,8 @@ A self-hosted system monitoring stack. The agent (FastAPI + psutil) runs nativel
 - **OS update check** — shows pending updates on macOS (`softwareupdate`) and Debian/RPi (`apt`), cached 24 h
 - **Docker image update check** — per-container update badge, cached 24 h
 - **All active network interfaces** — shows every up, non-loopback interface with IP, speed, and link type
-- **CPU temperature** — psutil on Linux/Raspberry Pi; `osx-cpu-temp` on macOS Intel; hidden on Apple Silicon
+- **CPU temperature** — psutil + sysfs fallback on Linux/Raspberry Pi; `osx-cpu-temp` on macOS Intel; hidden on Apple Silicon
+- **Version mismatch warnings** — dashboard shows a yellow banner if the server or any client is running a different git SHA than expected; updated automatically on every deploy
 - **User-configurable alert thresholds** — per-card color (Amber/Red/Blue/Green/Purple/custom hex), percentage input, on/off; persisted in `localStorage`
 - **Drag-to-reorder & hide** cards and charts; order persisted in `localStorage`
 - **Multi-host** — auto-cycles hosts or pin to a specific machine

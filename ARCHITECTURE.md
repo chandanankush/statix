@@ -10,21 +10,23 @@ These components can run on the same machine for local monitoring or be distribu
 
 ## Components
 - **System Stats Service (`client/system_stats/`)** — Installable Python package that uses `psutil` to collect live host metrics and serves them from `/system`. Collects:
-  - CPU usage, frequency, core counts, and **temperature** (psutil on Linux/RPi; `osx-cpu-temp` on macOS Intel; `null` on Apple Silicon).
+  - CPU usage, frequency, core counts, and **temperature** (psutil on Linux/RPi with a sysfs `/sys/class/thermal/thermal_zone0/temp` fallback for restricted systemd environments; `osx-cpu-temp` on macOS Intel; `null` on Apple Silicon).
+  - **Processor name** via `/proc/cpuinfo` (`model name:` on x86, `Hardware:` on ARM/Raspberry Pi), falling back to `uname.machine` (e.g. `aarch64`) when the file is absent.
   - All active (up, non-loopback, IPv4) network interfaces with link speed and type. Speed is detected via `ifconfig` media line on macOS and `iw dev link` on Linux WiFi. Entire interface list is cached 5 min.
-  - **OS pending update count** via `softwareupdate --list` (macOS), `apt-get -s upgrade` (Debian/RPi), or `dnf`/`yum check-update` (RHEL). Cached 24 h.
+  - **OS pending update count** via `softwareupdate --list` (macOS), `apt list --upgradable` (Debian/RPi via `/usr/bin/apt`), or `dnf`/`yum check-update` (RHEL). Cached 24 h.
   - Docker container status via `docker ps --all`, including a **per-image update check** (`docker pull --dry-run` on Docker 24+). Cached 24 h per image.
   - Hardware model detected once at startup: device-tree on Raspberry Pi, `sysctl hw.model` on macOS, DMI on x86 Linux.
 - **Forwarder (`system-stats-forwarder`)** — Console script that periodically polls the FastAPI endpoint and forwards condensed metrics alongside the rich snapshot to the monitoring server. Supports multiple destinations via comma-separated `MONITORING_SERVER_METRICS_URL`; each destination is contacted independently.
-- **Monitoring Server (`server/`)** — Flask API backed by SQLite. Provides `/metrics` for ingestion, `/details` for host snapshots, `/data` for retrieval, `/dashboard` for visualization, and `/health` for readiness checks. Published to Docker Hub as `midnightappcoder/statix`.
+- **Monitoring Server (`server/`)** — Flask API backed by SQLite. Provides `/metrics` for ingestion, `/details` for host snapshots, `/data` for retrieval, `/dashboard` for visualization, and `/health` for readiness checks (including `version` and `expected_client_version` fields for stale-deployment detection). Published to Docker Hub as `midnightappcoder/statix`.
 - **Dashboard** — Chart.js-powered page (`server/templates/dashboard.html`) that:
   - Renders live trend charts (CPU %, RAM %, Disk I/O, Network I/O) with drag-to-reorder.
   - Shows detail cards for CPU (with temperature), memory, storage, system info (OS update badge), all network interfaces, uptime, and Docker (with per-container update badges).
   - Applies **user-configurable alert thresholds**: per-card colour (Amber / Red / Blue / Green / Purple / custom hex), percentage threshold, on/off toggle. Settings persisted in `localStorage`. Cards re-colour instantly on modal close.
+  - Shows a **version mismatch warning banner** when the server or any connected client is running a different git SHA than expected. Fetches `expected_client_version` from `/health` at page load; compares against `statix_client_version` in each host’s `/details` snapshot.
   - Supports dark/light theme and multi-host auto-cycling.
 - **Storage** — SQLite database persisted at `/app/data/metrics.db`. Docker Compose mounts the `statix_data` named volume so history survives container restarts.
 - **Docker Compose (`docker-compose.yml`)** — Runs the monitoring server container pulling `midnightappcoder/statix:latest` from Docker Hub. The client runs natively on each monitored host.
-- **CI/CD (`.github/workflows/docker-publish.yml`)** — Automatically builds and pushes a multi-arch image (`linux/amd64` + `linux/arm64`) to Docker Hub on every push to `main` that touches `server/**`.
+- **CI/CD (`.github/workflows/docker-publish.yml`)** — Automatically builds and pushes a multi-arch image (`linux/amd64` + `linux/arm64`) to Docker Hub on every push to `main` that touches `server/**`. Passes the git commit SHA as `GIT_SHA` build arg so `STATIX_SERVER_VERSION` and `STATIX_EXPECTED_CLIENT_VERSION` are baked into each image. The client installer records the same SHA to `~/.local/share/statix/client_version` at install time. Together these enable the dashboard’s zero-configuration version mismatch detection.
 
 ## Data Flow
 1. System Stats Service gathers metrics locally with `psutil` and serves them via `GET /system`.
