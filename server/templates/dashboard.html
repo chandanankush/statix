@@ -721,8 +721,14 @@
             color: #059669;
             border: 1px solid rgba(52, 211, 153, 0.35);
         }
+        .update-badge-unknown {
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--color-card-muted);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
         body.theme-dark .update-badge-available { background: rgba(251, 191, 36, 0.22); color: #fbbf24; }
         body.theme-dark .update-badge-uptodate  { background: rgba(52, 211, 153, 0.18); color: #34d399; }
+        body.theme-dark .update-badge-unknown   { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
 
         /* host status dot indicators */
         .dot-online  { color: #22c55e; margin-right: 6px; }
@@ -1925,19 +1931,20 @@
             if (osUpdateEl) {
                 while (osUpdateEl.firstChild) osUpdateEl.removeChild(osUpdateEl.firstChild);
                 const osUpd = system.os_update || null;
+                const badge = document.createElement('span');
                 if (!osUpd || osUpd.available === null || osUpd.available === undefined) {
-                    osUpdateEl.textContent = '—';
+                    badge.className = 'update-badge update-badge-unknown';
+                    badge.textContent = 'Check unavailable';
                 } else if (osUpd.available) {
-                    const badge = document.createElement('span');
                     badge.className = 'update-badge update-badge-available';
-                    badge.textContent = typeof osUpd.count === 'number' ? `✓ ${osUpd.count} update${osUpd.count !== 1 ? 's' : ''} available` : '✓ Update available';
-                    osUpdateEl.appendChild(badge);
+                    badge.textContent = typeof osUpd.count === 'number'
+                        ? `↑ ${osUpd.count} update${osUpd.count !== 1 ? 's' : ''} available`
+                        : '↑ Update available';
                 } else {
-                    const badge = document.createElement('span');
                     badge.className = 'update-badge update-badge-uptodate';
-                    badge.textContent = 'Up to date';
-                    osUpdateEl.appendChild(badge);
+                    badge.textContent = '✓ Up to date';
                 }
+                osUpdateEl.appendChild(badge);
             }
 
             const network = (details.network && details.network.primary_interface) || null;
