@@ -4,33 +4,44 @@ This project combines a host-native system stats agent with a lightweight monito
 
 ![stats](https://github.com/user-attachments/assets/2e0ffe7d-c37e-4acd-9ea9-997891104216)
 
-
-
-
 ## Quick Usage
-1. **Start the monitoring server** (via Docker Compose):
-   ```sh
-   docker-compose up --build -d
-   ```
-   Visit `http://localhost:5050/dashboard` (use `MONITOR_PORT` to override).
 
-2. **Install the system stats agent** on each host:
-   ```sh
-   pip install ./client
-   system-stats-service &
-   system-stats-forwarder &
-   ```
-   Configure environment variables as needed (see component READMEs).
+### 1. Start the monitoring server
+```sh
+docker-compose up --build -d
+```
+Visit `http://localhost:5050/dashboard` (use `MONITOR_PORT` to override).
 
-3. **View metrics** on the dashboard and filter by hostname/timeframe to inspect live charts and hardware details.
+### 2. Install the agent on each host (macOS or Raspberry Pi)
+A single command installs, configures, and starts both the stats service and the forwarder as persistent background daemons:
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)
+```
+The script detects your platform, creates an isolated Python environment, registers services (launchd on macOS, systemd on Linux), and sets them to start automatically on boot/login.
+
+Pass flags to skip the interactive prompts:
+```sh
+curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh \
+  | bash -s -- --server-url http://192.168.0.209:5050 --interval 30
+```
+
+Re-running the same command upgrades the package and restarts services without losing your config.
+
+To uninstall:
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/uninstall.sh)
+```
+
+### 3. View metrics
+Open `http://YOUR_SERVER:5050/dashboard` and filter by hostname and timeframe to inspect live charts and hardware details.
 
 ## Components
-- **client/** – FastAPI service and forwarder that collect host metrics (detailed docs in `client/README.md`).
-- **server/** – Flask ingestion API, SQLite storage, and Chart.js dashboard (detailed docs in `server/README.md`).
+- **client/** – FastAPI stats service, forwarder, and one-line installer/uninstaller. See `client/README.md`.
+- **server/** – Flask ingestion API, SQLite storage, and Chart.js dashboard. See `server/README.md`.
 - **ARCHITECTURE.md** – High-level design and data flow.
 - **docker-compose.yml** – Container orchestration for the monitoring server.
 
 ## Getting Help
-- `client/README.md` explains installation, configuration, and service templates for the agent/forwarder.
-- `server/README.md` covers server configuration, Docker usage, and API endpoints.
-- `ARCHITECTURE.md` provides an overview for new contributors.
+- `client/README.md` — installation, configuration, and service management for the agent.
+- `server/README.md` — server configuration, Docker usage, and API endpoints.
+- `ARCHITECTURE.md` — overview for new contributors.
