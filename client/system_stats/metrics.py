@@ -194,8 +194,9 @@ def _all_network_interfaces() -> List[Dict[str, Any]]:
     }
     interfaces: List[Dict[str, Any]] = []
     sys_name = platform.system()
+    _VIRTUAL_PREFIXES = ("lo", "docker", "br-", "veth", "virbr", "vmbr", "lxc", "lxdbr", "tun", "tap", "dummy")
     for name, stat in stats.items():
-        if not stat.isup or name.lower().startswith("lo"):
+        if not stat.isup or name.lower().startswith(_VIRTUAL_PREFIXES):
             continue
         inet_info = next((addr for addr in addrs.get(name, []) if addr.family == socket.AF_INET), None)
         if not inet_info:
