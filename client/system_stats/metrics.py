@@ -100,6 +100,104 @@ _DOCKER_FALLBACK_PATHS = (
     "/Applications/Docker.app/Contents/Resources/bin/docker",
 )
 
+# ── update-check cache (TTL = 24 h) ──────────────────────────────────────────
+_UPDATE_CACHE_TTL: int = 24 * 3600  # seconds
+_update_cache: Dict[str, Any] = {}  # key → {"value": ..., "ts": float}
+
+
+def _cache_get(key: str) -> Any:
+    """Return cached value if still within TTL, otherwise sentinel _MISS."""
+    entry = _update_cache.get(key)
+    if entry and (time.time() - entry["ts"]) < _UPDATE_CACHE_TTL:
+        return entry["value"]
+    return _MISS
+
+
+_MISS = object()  # sentinel
+
+
+def _cache_set(key: str, value: Any) -> Any:
+    _update_cache[key] = {"value": value, "ts": time.time()}
+    return value
+
+
+def _check_os_updates_now() -> Dict[str, Any]:
+    """Check for available OS updates using the platform package manager."""
+    system_name = platform.system()
+    try:
+        if system_name == "Darwin":
+            result = subprocess.run(
+                ["softwareupdate", "--list"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            output = result.stdout + result.stderr
+            available = "No new software available" not in output and "recommended" in output.lower()
+            return {"available": available}
+        if system_name == "Linux":
+            if shutil.which("apt-get"):
+                result = subprocess.run(
+                    ["apt-get", "-s", "upgrade"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"},
+                )
+                upgraded = sum(
+                    1
+                    for line in result.stdout.splitlines()
+                    if line.startswith("Inst ")
+                )
+                return {"available": upgraded > 0, "count": upgraded}
+            for pkg_mgr in ("dnf", "yum"):
+                if shutil.which(pkg_mgr):
+                    result = subprocess.run(
+                        [pkg_mgr, "check-update", "-q"],
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                    )
+                    # exit code 100 = updates available; 0 = up to date
+                    return {"available": result.returncode == 100}
+    except Exception:
+        pass
+    return {"available": None}  # unknown / unsupported
+
+
+def _get_os_updates() -> Dict[str, Any]:
+    """Return OS update info, re-checking at most once every 24 hours."""
+    cached = _cache_get("os_updates")
+    if cached is not _MISS:
+        return cached  # type: ignore[return-value]
+    return _cache_set("os_updates", _check_os_updates_now())
+
+
+def _check_docker_image_update_now(docker_bin: str, image: str) -> Optional[bool]:
+    """Return True if a newer image is available, False if up-to-date, None if unknown."""
+    try:
+        result = subprocess.run(
+            [docker_bin, "pull", "--dry-run", image],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if result.returncode == 0:
+            output = result.stdout + result.stderr
+            return "Downloaded newer image" in output or "Pull complete" in output
+    except Exception:
+        pass
+    return None
+
+
+def _get_docker_image_update(docker_bin: str, image: str) -> Optional[bool]:
+    """Return image update status, re-checking at most once every 24 hours."""
+    key = f"docker_image:{image}"
+    cached = _cache_get(key)
+    if cached is not _MISS:
+        return cached  # type: ignore[return-value]
+    return _cache_set(key, _check_docker_image_update_now(docker_bin, image))
+
 
 def _find_docker() -> Optional[str]:
     """Return the docker executable path, or None if not found.
@@ -147,13 +245,15 @@ def _collect_docker_info() -> Dict[str, Any]:
             raw = json.loads(line)
         except json.JSONDecodeError:
             continue
+        image_name = raw.get("Image", "")
         containers.append({
             "id": raw.get("ID", ""),
             "name": raw.get("Names", "").lstrip("/"),
-            "image": raw.get("Image", ""),
+            "image": image_name,
             "state": raw.get("State", ""),
             "status": raw.get("Status", ""),
             "ports": raw.get("Ports", ""),
+            "update_available": _get_docker_image_update(docker_bin, image_name) if image_name else None,
         })
 
     running = sum(1 for c in containers if c["state"] == "running")
@@ -222,6 +322,7 @@ def collect_system_metrics() -> Dict[str, Any]:
             "architecture": uname.machine,
             "platform": platform.platform(),
             "model": model,
+            "os_update": _get_os_updates(),
         },
         "docker": _collect_docker_info(),
     }

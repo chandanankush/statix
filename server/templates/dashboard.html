@@ -702,6 +702,28 @@
         body.theme-dark .docker-state-exited  { background: rgba(248, 113, 113, 0.25); color: #f87171; }
         body.theme-dark .docker-state-paused  { background: rgba(251, 191,  36, 0.25); color: #fbbf24; }
 
+        /* ── update availability badges ──────────────────────────────── */
+        .update-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .update-badge-available {
+            background: rgba(251, 191, 36, 0.2);
+            color: #b45309;
+            border: 1px solid rgba(251, 191, 36, 0.45);
+        }
+        .update-badge-uptodate {
+            background: rgba(52, 211, 153, 0.15);
+            color: #059669;
+            border: 1px solid rgba(52, 211, 153, 0.35);
+        }
+        body.theme-dark .update-badge-available { background: rgba(251, 191, 36, 0.22); color: #fbbf24; }
+        body.theme-dark .update-badge-uptodate  { background: rgba(52, 211, 153, 0.18); color: #34d399; }
+
         /* host status dot indicators */
         .dot-online  { color: #22c55e; margin-right: 6px; }
         .dot-offline { color: #f97316; margin-right: 6px; }
@@ -926,6 +948,7 @@
                         <div class="stat-row"><span class="stat-label">Architecture</span><span class="stat-value" id="systemArchitecture">—</span></div>
                         <div class="stat-row"><span class="stat-label">Platform</span><span class="stat-value" id="systemPlatform">—</span></div>
                         <div class="stat-row"><span class="stat-label">Model</span><span class="stat-value" id="systemModel">—</span></div>
+                        <div class="stat-row"><span class="stat-label">OS Updates</span><span class="stat-value" id="systemOsUpdate">—</span></div>
                     </div>
                 </div>
             </article>
@@ -1083,6 +1106,7 @@
             systemArchitecture: document.getElementById('systemArchitecture'),
             systemPlatform: document.getElementById('systemPlatform'),
             systemModel: document.getElementById('systemModel'),
+            systemOsUpdate: document.getElementById('systemOsUpdate'),
             networkInterface: document.getElementById('networkInterface'),
             networkIPv4: document.getElementById('networkIPv4'),
             networkSpeed: document.getElementById('networkSpeed'),
@@ -1801,6 +1825,21 @@
                 imageEl.className = 'docker-container-image';
                 imageEl.textContent = container.image || '—';
 
+                // Per-image update indicator
+                if (container.update_available === true) {
+                    const updEl = document.createElement('span');
+                    updEl.className = 'update-badge update-badge-available';
+                    updEl.textContent = '↑ Update available';
+                    imageEl.appendChild(document.createTextNode(' '));
+                    imageEl.appendChild(updEl);
+                } else if (container.update_available === false) {
+                    const updEl = document.createElement('span');
+                    updEl.className = 'update-badge update-badge-uptodate';
+                    updEl.textContent = 'Up to date';
+                    imageEl.appendChild(document.createTextNode(' '));
+                    imageEl.appendChild(updEl);
+                }
+
                 info.appendChild(nameEl);
                 info.appendChild(imageEl);
 
@@ -1880,6 +1919,26 @@
             setDetailField('systemArchitecture', system.architecture || '—');
             setDetailField('systemPlatform', system.platform || '—');
             setDetailField('systemModel', system.model || '—');
+
+            // OS update badge
+            const osUpdateEl = detailElements.systemOsUpdate;
+            if (osUpdateEl) {
+                while (osUpdateEl.firstChild) osUpdateEl.removeChild(osUpdateEl.firstChild);
+                const osUpd = system.os_update || null;
+                if (!osUpd || osUpd.available === null || osUpd.available === undefined) {
+                    osUpdateEl.textContent = '—';
+                } else if (osUpd.available) {
+                    const badge = document.createElement('span');
+                    badge.className = 'update-badge update-badge-available';
+                    badge.textContent = typeof osUpd.count === 'number' ? `✓ ${osUpd.count} update${osUpd.count !== 1 ? 's' : ''} available` : '✓ Update available';
+                    osUpdateEl.appendChild(badge);
+                } else {
+                    const badge = document.createElement('span');
+                    badge.className = 'update-badge update-badge-uptodate';
+                    badge.textContent = 'Up to date';
+                    osUpdateEl.appendChild(badge);
+                }
+            }
 
             const network = (details.network && details.network.primary_interface) || null;
             setDetailField('networkInterface', network && network.name ? network.name : '—');
