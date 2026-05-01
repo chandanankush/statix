@@ -26,7 +26,7 @@ These components can run on the same machine for local monitoring or be distribu
   - Supports dark/light theme and multi-host auto-cycling.
 - **Storage** — SQLite database persisted at `/app/data/metrics.db`. Docker Compose mounts the `statix_data` named volume so history survives container restarts.
 - **Docker Compose (`docker-compose.yml`)** — Runs the monitoring server container pulling `midnightappcoder/statix:latest` from Docker Hub. The client runs natively on each monitored host.
-- **CI/CD (`.github/workflows/docker-publish.yml`)** — Automatically builds and pushes a multi-arch image (`linux/amd64` + `linux/arm64`) to Docker Hub on every push to `main` that touches `server/**`. Passes the git commit SHA as `GIT_SHA` build arg so `STATIX_SERVER_VERSION` and `STATIX_EXPECTED_CLIENT_VERSION` are baked into each image. The client installer records the same SHA to `~/.local/share/statix/client_version` at install time. Together these enable the dashboard’s zero-configuration version mismatch detection.
+- **CI/CD (`.github/workflows/docker-publish.yml`)** — Automatically builds and pushes a multi-arch image (`linux/amd64` + `linux/arm64`) to Docker Hub on every push to `main`. Passes the git commit SHA as `GIT_SHA` build arg so `STATIX_SERVER_VERSION` and `STATIX_EXPECTED_CLIENT_VERSION` are baked into each image. The client installer records the same SHA to `~/.local/share/statix/client_version` at install time. Together these enable the dashboard's zero-configuration version mismatch detection.
 
 ## Data Flow
 1. System Stats Service gathers metrics locally with `psutil` and serves them via `GET /system`.
@@ -35,7 +35,7 @@ These components can run on the same machine for local monitoring or be distribu
 4. The dashboard issues `/data?hostname=...&timeframe=...` to visualise historical readings and `/details?hostname=...` to populate the summary cards and apply alert threshold colouring.
 
 ## Deployment Considerations
-- **System Stats Service** — Install on each monitored machine with a single `bash <(curl ...)` command (`client/install.sh`). Creates an isolated Python venv, registers launchd (macOS) or systemd (Linux) services, and starts them automatically.
+- **System Stats Service** — Install on each monitored machine with a single `bash <(curl ...)` command (`client/install.sh`). Creates an isolated Python venv, registers launchd (macOS) or systemd (Linux) services, and starts them automatically. On upgrade, the installer checks whether the existing venv is healthy (imports `fastapi`, `uvicorn`, `psutil`); if any dependency is missing it wipes the venv and does a full reinstall, making it self-healing.
 - **Forwarder** — Installed alongside the service by the same installer. Configured with the monitoring server URL and poll interval at install time.
 - **Server Persistence** — Keep the `statix_data` Docker volume or bind mount to retain history. Back up `/app/data/metrics.db` regularly (`docker cp statix:/app/data/metrics.db ./backup.db`).
 - **Security** — Set `STATIX_API_KEY` to protect destructive endpoints (DELETE/clean). Add TLS via a reverse proxy (nginx, Caddy) in front of the container.
@@ -178,7 +178,7 @@ Results are shown in the **Version Status** panel just below the status bar — 
 
 | Warning | Fix |
 |---|---|
-| Server image outdated | `docker pull midnightappcoder/statix:latest && docker compose up -d` |
+| Server image outdated | Re-run `bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)` on the server host — it pulls the latest image and recreates the container, preserving the data volume. |
 | Client on "hostname" outdated | SSH into that host and re-run `bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)` |
 | `client_version` shows `dev` | Install via the one-line installer (not `pip install .`) so the version file is written |
 
