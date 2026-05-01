@@ -1,175 +1,127 @@
-# Monitoring Server
+# Statix Server
 
-Flask application that ingests metrics from the system stats forwarder, persists them in SQLite, and exposes both APIs and a Chart.js dashboard.
+Flask-based monitoring server that ingests host metrics, persists them in SQLite, and renders a Chart.js dashboard. Published to Docker Hub as [`chandanankush/statix`](https://hub.docker.com/r/chandanankush/statix) and built for `linux/amd64` and `linux/arm64` (Raspberry Pi).
 
-## Architecture Summary
-- `server.py` uses Flask to define REST endpoints, handle persistence, and render the dashboard template.
-- Metrics are stored in two tables:
-  - `metrics` – time-series of `hostname`, `cpu`, `ram`, `disk`, `timestamp`.
-  - `host_details` – latest rich snapshot (`details_json`) per host for dashboard summary cards.
-- Templates live under `server/templates/`; `dashboard.html` uses Chart.js and vanilla JS to plot trends and render detail cards.
+## One-Line Install
 
-## Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/metrics` | Accepts JSON payload `{hostname, cpu, ram, disk, timestamp, details?}`. Persists metrics and optional `details` snapshot. |
-| `GET` | `/data` | Returns `{count, data}` filtered by `hostname` and/or `timeframe` (`1h`, `24h`, `7d`). |
-| `GET` | `/details` | Returns latest snapshot for a given `hostname`. |
-| `GET` | `/dashboard` | Renders the dashboard UI. |
-| `GET` | `/health` | Health check. |
+Requires Docker. Works on any machine — Linux, macOS, or a server/VPS.
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)
+```
+
+The installer will prompt for:
+- **Dashboard port** — defaults to `5050`
+- **Data directory** — defaults to `~/.local/share/statix/data`
+
+Pass flags to skip prompts:
+```sh
+curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh \
+  | bash -s -- --port 5050 --data-dir /opt/statix/data
+```
+
+Re-running the same command **upgrades** to the latest image, keeping your port and data directory.
+
+### Uninstall
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/uninstall.sh)
+```
+
+---
+
+## Docker Compose
+
+If you prefer Compose:
+```sh
+docker-compose up -d
+```
+Dashboard: `http://localhost:5050/dashboard`
+
+Override the port:
+```sh
+MONITOR_PORT=8080 docker-compose up -d
+```
+
+To force a local build instead of pulling from Docker Hub:
+```sh
+docker-compose up --build -d
+```
+
+---
+
+## Manual Docker Run
+
+```sh
+docker run -d \
+  --name statix \
+  --restart unless-stopped \
+  -p 5050:5000 \
+  -v statix_data:/app/data \
+  -e DATABASE_PATH=/app/data/metrics.db \
+  chandanankush/statix:latest
+```
+
+---
 
 ## Configuration
-Environment variables:
-- `DATABASE_PATH` (default `server/data/metrics.db`) – SQLite database location. Ensure parent directory exists or use Docker volume/bind mount.
 
-## Running Locally (without Docker)
+| Environment Variable | Default | Description |
+|---|---|---|
+| `DATABASE_PATH` | `/app/data/metrics.db` | Path to the SQLite database inside the container. Mount a volume to persist data. |
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/metrics` | Ingest a metrics payload from the forwarder. |
+| `GET` | `/data` | Query stored metrics. Params: `hostname`, `timeframe` (`1h`, `24h`, `7d`). |
+| `GET` | `/details` | Latest rich snapshot for a host. Param: `hostname`. |
+| `GET` | `/hosts` | List all known hosts with last-seen timestamps. |
+| `POST` | `/hosts/<hostname>/clean` | Delete metric history for a host (keeps host_details). |
+| `DELETE` | `/hosts/<hostname>` | Remove a host and all its data entirely. |
+| `GET` | `/dashboard` | Chart.js dashboard UI. |
+| `GET` | `/health` | Health check — returns `{"status": "ok"}`. |
+
+---
+
+## Docker Hub & CI
+
+The image is automatically built and pushed to Docker Hub on every push to `main` that touches `server/**`, via the GitHub Actions workflow at `.github/workflows/docker-publish.yml`.
+
+Images are tagged:
+- `chandanankush/statix:latest` — always points to the most recent `main` build
+- `chandanankush/statix:<git-sha>` — immutable per-commit tag
+
+To pull a specific commit:
 ```sh
-python3 -m venv .venv
-source .venv/bin/activate
-pip install flask gunicorn
-export DATABASE_PATH=./data/metrics.db
-python server.py
+docker pull chandanankush/statix:<sha>
 ```
-Dashboard: `http://127.0.0.1:5050/dashboard`
 
-## Docker Usage
-Dockerfile (located in `server/`) installs dependencies and runs `gunicorn`.
-### Build & Run
+### Setting up Docker Hub secrets (one-time, repo owner only)
+
+1. Go to **GitHub → Settings → Secrets and variables → Actions**
+2. Add `DOCKERHUB_USERNAME` (your Docker Hub username)
+3. Add `DOCKERHUB_TOKEN` (a Docker Hub Access Token — create one at hub.docker.com → Account Settings → Security)
+
+After that, every push to `main` will automatically publish a new image.
+
+---
+
+## Useful Commands
+
 ```sh
-docker build -t monitoring-server server
+# Follow logs
+docker logs -f statix
 
-docker run --rm \
-  --name monitoring-server \
-  -p 5050:5000 \
-  -e DATABASE_PATH=/app/data/metrics.db \
-  -v $(pwd)/server/data:/app/data \
-  monitoring-server
+# Stop / start
+docker stop statix
+docker start statix
+
+# Open a shell inside the container
+docker exec -it statix bash
+
+# Check health
+curl http://127.0.0.1:5050/health
 ```
-### Build & Transfer to Another Docker Host
-```sh
-# Build the image locally
-docker build -t monitoring-server:latest server
-
-# Export it to a tarball for copy/scp to another machine
-docker save monitoring-server:latest -o monitoring-server.tar
-
-# On the target host, load (and optionally re-tag + push)
-docker load -i monitoring-server.tar
-docker tag monitoring-server:latest myregistry.example.com/monitoring-server:latest
-docker push myregistry.example.com/monitoring-server:latest  # optional
-```
-
-> Tip: swap `myregistry.example.com/monitoring-server:latest` with your own registry/namespace. If you use `docker context`
-> to point at a remote engine, you can run the build directly on that host instead of saving/loading.
-
-## Metrics Payload Schema
-The monitoring server expects the client/forwarder to POST JSON shaped as:
-
-```jsonc
-{
-  "hostname": "chandan-mac-mini.local",       // string host identifier
-  "cpu": 12.5,                                 // float CPU utilisation percentage
-  "ram": 54.2,                                 // float RAM utilisation percentage
-  "disk": 38.7,                                // float primary disk utilisation percentage
-  "timestamp": 1737718500,                     // unix epoch seconds when the reading was taken
-  "disk_read": 1.23,                           // optional float MB/s read throughput (defaults to 0.0)
-  "disk_write": 0.45,                          // optional float MB/s write throughput (defaults to 0.0)
-  "details": { ... }                           // optional nested snapshot used by the dashboard host cards
-}
-```
-
-When `details` is supplied it should be the same structure returned by the client’s `/system` endpoint (see
-`client/README.md`). Unknown top-level fields are ignored.
-
-Example payload captured from the forwarder:
-
-```json
-{
-  "hostname": "chandan-mac-mini.local",
-  "cpu": 18.4,
-  "ram": 57.9,
-  "disk": 41.2,
-  "timestamp": 1737718500,
-  "disk_read": 0.18,
-  "disk_write": 0.09,
-  "details": {
-    "collected_at": "2025-09-23T16:18:12.743209+00:00",
-    "cpu": {
-      "percent": 18.4,
-      "logical_cores": 12,
-      "physical_cores": 12,
-      "frequency": {"current": 3200.0, "min": 800.0, "max": 3200.0}
-    },
-    "memory": {
-      "percent": 57.9,
-      "total": 34359738368,
-      "available": 14411518807,
-      "used": 19948219561,
-      "swap": {"percent": 12.6, "total": 4294967296, "used": 540672000}
-    },
-    "disk": {"percent": 41.2, "mount": "/", "total": 512110190592, "used": 210763776000},
-    "disk_io": {"read_bytes": 11811160064, "write_bytes": 6871947673},
-    "network": {
-      "primary_interface": {
-        "name": "en1",
-        "ipv4": "192.168.0.82",
-        "mtu": 1500,
-        "speed_mbps": 1000
-      }
-    },
-    "throughput": {
-      "disk_read_bytes_per_sec": 188432.0,
-      "disk_write_bytes_per_sec": 94321.0,
-      "disk_read_mb_per_sec": 0.18,
-      "disk_write_mb_per_sec": 0.09
-    },
-    "uptime": {
-      "human": "1 day, 2:17:15",
-      "boot_time": "2025-09-22T14:01:15+05:30"
-    },
-    "system": {
-      "hostname": "chandan-mac-mini.local",
-      "model": "Mac16,11",
-      "os": "macOS",
-      "os_release": "14.0"
-    }
-  }
-}
-```
-
-### Compose
-`docker-compose.yml` handles build/run and persists data using the `server_data` named volume. Launch with `docker-compose up --build -d`.
-
-## Data Schema
-```sql
-CREATE TABLE metrics (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp INTEGER NOT NULL,
-  hostname TEXT NOT NULL,
-  cpu REAL NOT NULL,
-  ram REAL NOT NULL,
-  disk REAL NOT NULL
-);
-CREATE INDEX idx_metrics_host_time ON metrics(hostname, timestamp);
-
-CREATE TABLE host_details (
-  hostname TEXT PRIMARY KEY,
-  details_json TEXT NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-```
-
-## Dashboard Behaviour
-- Polls `/data` every second using the selected `hostname` and `timeframe` filters.
-- Updates trend charts for CPU/RAM/Disk usage.
-- When a specific host is selected, fetches `/details?hostname=...` to populate summary cards (CPU info, memory usage, storage, system info, network info, uptime).
-
-## Development Notes
-- Designed for Python 3.11 in Docker; running locally requires matching dependencies.
-- Logging uses `logging.basicConfig` at INFO level. Adjust as needed.
-- Extendable: add new tables/endpoints to support additional metrics or alternate persistence layers (PostgreSQL, TimescaleDB, etc.).
-
-## Troubleshooting
-- **No data on dashboard** – Ensure forwarder is pushing metrics to `/metrics`; check server logs (`docker-compose logs` or stdout).
-- **SQLite locked errors** – Typically transient; consider moving to a server-grade DB if multiple writers are expected.
-- **Large datasets** – Add pagination/aggregation or migrate to a database optimised for time series.

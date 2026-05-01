@@ -7,10 +7,15 @@ This project combines a host-native system stats agent with a lightweight monito
 ## Quick Usage
 
 ### 1. Start the monitoring server
+Requires Docker. Pulls the pre-built image from Docker Hub:
 ```sh
-docker-compose up --build -d
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)
 ```
-Visit `http://localhost:5050/dashboard` (use `MONITOR_PORT` to override).
+Or with Docker Compose (also pulls from Docker Hub by default):
+```sh
+docker-compose up -d
+```
+Visit `http://localhost:5050/dashboard` (override port with `--port` flag or `MONITOR_PORT` env var).
 
 ### 2. Install the agent on each host (macOS or Raspberry Pi)
 A single command installs, configures, and starts both the stats service and the forwarder as persistent background daemons:

@@ -1,18 +1,24 @@
-# Build and run the monitoring server with: docker-compose up --build
-# Dashboard available at: http://localhost:5000/dashboard (or ${MONITOR_PORT})
+# Run the statix monitoring server from Docker Hub:
+#   docker-compose up -d
+#
+# To build locally instead of pulling from Docker Hub:
+#   docker-compose up --build -d
+#
+# Dashboard: http://localhost:5050/dashboard  (override port with MONITOR_PORT)
 version: "3.9"
 
 services:
-  server:
+  statix:
+    image: chandanankush/statix:latest
     build:
       context: ./server
     restart: unless-stopped
     environment:
       DATABASE_PATH: /app/data/metrics.db
     volumes:
-      - server_data:/app/data
+      - statix_data:/app/data
     ports:
       - "${MONITOR_PORT:-5050}:5000"
 
 volumes:
-  server_data:
+  statix_data:

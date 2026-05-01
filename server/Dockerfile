@@ -1,6 +1,6 @@
-# docker build -f server/Dockerfile -t monitoring-server:latest
-# docker save monitoring-server:latest -o monitoring-server.tar
-# docker run --rm -p 5050:5000 monitoring-server:latest
+# Image is published to Docker Hub as chandanankush/statix
+# Build locally: docker build -t chandanankush/statix server/
+# Run locally:   docker run -d -p 5050:5000 -v statix_data:/app/data chandanankush/statix
 
 FROM python:3.11-slim
 
@@ -13,8 +13,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY server/server.py /app/server.py
-COPY server/templates /app/templates
+# Build context is server/ so paths are relative to that directory
+COPY server.py /app/server.py
+COPY templates  /app/templates
 
 RUN pip install --no-cache-dir flask gunicorn
 
