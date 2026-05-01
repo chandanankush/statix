@@ -42,10 +42,12 @@ header()  { echo -e "\n${BOLD}$*${NC}"; }
 # ── parse CLI args ────────────────────────────────────────────────────────────
 SERVER_URL=""
 INTERVAL=""
+CLI_SERVER_URL=""   # set only when --server-url is passed; skips the prompt
+CLI_INTERVAL=""     # set only when --interval is passed; skips the prompt
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --server-url) SERVER_URL="$2"; shift 2 ;;
-        --interval)   INTERVAL="$2";   shift 2 ;;
+        --server-url) CLI_SERVER_URL="$2"; SERVER_URL="$2"; shift 2 ;;
+        --interval)   CLI_INTERVAL="$2";   INTERVAL="$2";   shift 2 ;;
         *) die "Unknown argument: $1" ;;
     esac
 done
@@ -141,18 +143,20 @@ header "Configuration"
 _default_url="${SERVER_URL:-http://192.168.0.209:5050}"
 _default_int="${INTERVAL:-30}"
 
-if [[ -z "$SERVER_URL" ]]; then
+# Always ask for the server URL so upgrades can easily change it.
+# Only skip the prompt when --server-url was passed explicitly on the CLI.
+if [[ -n "$CLI_SERVER_URL" ]]; then
+    info "Using server URL from --server-url: $SERVER_URL"
+else
     read -rp "  Monitoring server URL [${_default_url}]: " SERVER_URL
     SERVER_URL="${SERVER_URL:-${_default_url}}"
-else
-    info "Keeping existing server URL : $SERVER_URL  (pass --server-url to change)"
 fi
 
-if [[ -z "$INTERVAL" ]]; then
+if [[ -n "$CLI_INTERVAL" ]]; then
+    info "Using interval from --interval: ${INTERVAL}s"
+else
     read -rp "  Forwarding interval in seconds [${_default_int}]: " INTERVAL
     INTERVAL="${INTERVAL:-${_default_int}}"
-else
-    info "Keeping existing interval    : ${INTERVAL}s  (pass --interval to change)"
 fi
 
 # strip trailing slash from server URL
