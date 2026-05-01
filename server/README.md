@@ -145,7 +145,7 @@ Authorization: Bearer <your-key>
 
 ## Docker Hub & CI
 
-The image is automatically built and pushed to Docker Hub on every push to `main` that touches `server/**`, via `.github/workflows/docker-publish.yml`. Images are built for both `linux/amd64` and `linux/arm64`.
+The image is automatically built and pushed to Docker Hub on every push to `main`, via `.github/workflows/docker-publish.yml`. Images are built for both `linux/amd64` and `linux/arm64`.
 
 Each build bakes the git commit SHA into the image as environment variables via a `GIT_SHA` build arg:
 - `STATIX_SERVER_VERSION` — the SHA of the server build
@@ -177,6 +177,9 @@ Tags:
 ## Useful Commands
 
 ```sh
+# Upgrade to latest image (pull + recreate container, keeps data)
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)
+
 # Follow logs
 docker logs -f statix
 

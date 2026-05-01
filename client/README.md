@@ -208,3 +208,4 @@ system-stats-forwarder  # polls :5001 → monitoring server
 | Dashboard shows "version mismatch" warning for this host | Re-run the installer (`bash <(curl ...)`) to reinstall the latest client. The installer records the new git SHA automatically. |
 | `statix_client_version` shows `dev` | You installed the package manually (`pip install .`) instead of using the installer. Run the installer once to write the version file, or run `git rev-parse --short HEAD > ~/.local/share/statix/client_version` after a manual install. |
 | LibreSSL warnings on macOS | Install Python via Homebrew (`brew install python`) instead of the system Python. |
+| Services crash with `ModuleNotFoundError: No module named 'fastapi'` | The venv is broken (deps were skipped on a previous install). Re-run the installer — it detects a broken venv automatically, wipes it, and reinstalls all dependencies from scratch. |
