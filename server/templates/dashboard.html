@@ -1067,6 +1067,7 @@
                         <div class="stat-row"><span class="stat-label">Processor</span><span class="stat-value" id="cpuProcessor">—</span></div>
                         <div class="stat-row"><span class="stat-label">Cores</span><span class="stat-value" id="cpuCores">—</span></div>
                         <div class="stat-row"><span class="stat-label">Speed</span><span class="stat-value" id="cpuSpeed">—</span></div>
+                        <div class="stat-row" id="cpuTempRow"><span class="stat-label">Temperature</span><span class="stat-value" id="cpuTemp">—</span></div>
                     </div>
                     <div class="progress"><div class="progress-bar cpu" id="cpuUsageBar"></div></div>
                     <div class="stat-foot" id="cpuUsageText">CPU Usage: —</div>
@@ -2323,6 +2324,13 @@
             setDetailField('cpuProcessor', cpu.processor || '—');
             setDetailField('cpuCores', buildCoreSummary(cpu.logical_cores, cpu.physical_cores));
             setDetailField('cpuSpeed', formatFrequencyMHz(cpu.frequency_mhz));
+            const cpuTempRow = document.getElementById('cpuTempRow');
+            if (typeof cpu.temperature_c === 'number') {
+                setDetailField('cpuTemp', `${cpu.temperature_c.toFixed(1)} °C`);
+                if (cpuTempRow) cpuTempRow.style.display = '';
+            } else {
+                if (cpuTempRow) cpuTempRow.style.display = 'none';
+            }
             const cpuPercent = typeof cpu.percent === 'number' ? cpu.percent : null;
             const cpuUsageText = cpuPercent === null ? 'CPU Usage: —' : `CPU Usage: ${cpuPercent.toFixed(1)}%`;
             setDetailField('cpuUsageText', cpuUsageText);

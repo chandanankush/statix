@@ -339,6 +339,57 @@ def _find_docker() -> Optional[str]:
     return None
 
 
+def _get_cpu_temperature() -> Optional[float]:
+    """Return CPU temperature in °C, or None if unavailable.
+
+    Strategy:
+    - Linux (including Raspberry Pi): psutil.sensors_temperatures() under
+      'cpu_thermal', 'cpu-thermal', 'coretemp', or 'k10temp'.
+    - macOS Intel: run `osx-cpu-temp` if on PATH (brew install osx-cpu-temp).
+    - macOS Apple Silicon: no reliable unprivileged method → None.
+    """
+    system = platform.system()
+
+    if system == "Linux":
+        try:
+            temps = psutil.sensors_temperatures()
+            if not temps:
+                return None
+            # Preference order: Raspberry Pi thermal zone, Intel coretemp, AMD k10temp, fallback
+            for key in ("cpu_thermal", "cpu-thermal", "coretemp", "k10temp"):
+                if key in temps and temps[key]:
+                    return round(temps[key][0].current, 1)
+            # Fallback: first available sensor that looks CPU-related
+            for key, entries in temps.items():
+                if entries and any(k in key.lower() for k in ("cpu", "core", "temp", "thermal")):
+                    return round(entries[0].current, 1)
+        except Exception:
+            pass
+        return None
+
+    if system == "Darwin":
+        osx_cpu_temp = shutil.which("osx-cpu-temp")
+        if osx_cpu_temp is None:
+            return None
+        try:
+            result = subprocess.run(
+                [osx_cpu_temp],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if result.returncode == 0:
+                # Output: "CPU: 45.2°C" or just "45.2°C"
+                match = re.search(r"([\d.]+)\s*°?C", result.stdout)
+                if match:
+                    return round(float(match.group(1)), 1)
+        except Exception:
+            pass
+        return None
+
+    return None
+
+
 def _collect_docker_info() -> Dict[str, Any]:
     """Return Docker container status, or an unavailable marker if Docker is absent/down."""
     docker_bin = _find_docker()
@@ -426,6 +477,7 @@ def collect_system_metrics() -> Dict[str, Any]:
             "min_frequency_mhz": cpu_freq.min if cpu_freq else None,
             "max_frequency_mhz": cpu_freq.max if cpu_freq else None,
             "processor": uname.processor or platform.processor(),
+            "temperature_c": _get_cpu_temperature(),
         },
         "memory": memory,
         "swap": swap,
