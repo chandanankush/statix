@@ -1,6 +1,6 @@
-# Image is published to Docker Hub as chandanankush/statix
-# Build locally: docker build -t chandanankush/statix server/
-# Run locally:   docker run -d -p 5050:5000 -v statix_data:/app/data chandanankush/statix
+# Image is published to Docker Hub as midnightappcoder/statix
+# Build locally: docker build -t midnightappcoder/statix server/
+# Run locally:   docker run -d -p 5050:5000 -v statix_data:/app/data midnightappcoder/statix
 
 FROM python:3.11-slim
 

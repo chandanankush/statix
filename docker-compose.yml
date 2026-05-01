@@ -9,7 +9,7 @@ version: "3.9"
 
 services:
   statix:
-    image: chandanankush/statix:latest
+    image: midnightappcoder/statix:latest
     build:
       context: ./server
     restart: unless-stopped

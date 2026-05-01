@@ -9,7 +9,7 @@ on:
   workflow_dispatch:   # allow manual trigger from GitHub UI
 
 env:
-  IMAGE: chandanankush/statix
+  IMAGE: midnightappcoder/statix
 
 jobs:
   build-and-push:

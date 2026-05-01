@@ -1,6 +1,6 @@
 # Statix Server
 
-Flask-based monitoring server that ingests host metrics, persists them in SQLite, and renders a Chart.js dashboard. Published to Docker Hub as [`chandanankush/statix`](https://hub.docker.com/r/chandanankush/statix) and built for `linux/amd64` and `linux/arm64` (Raspberry Pi).
+Flask-based monitoring server that ingests host metrics, persists them in SQLite, and renders a Chart.js dashboard. Published to Docker Hub as [`midnightappcoder/statix`](https://hub.docker.com/r/midnightappcoder/statix) and built for `linux/amd64` and `linux/arm64` (Raspberry Pi).
 
 ## One-Line Install
 
@@ -58,7 +58,7 @@ docker run -d \
   -p 5050:5000 \
   -v statix_data:/app/data \
   -e DATABASE_PATH=/app/data/metrics.db \
-  chandanankush/statix:latest
+  midnightappcoder/statix:latest
 ```
 
 ---
@@ -91,12 +91,12 @@ docker run -d \
 The image is automatically built and pushed to Docker Hub on every push to `main` that touches `server/**`, via the GitHub Actions workflow at `.github/workflows/docker-publish.yml`.
 
 Images are tagged:
-- `chandanankush/statix:latest` — always points to the most recent `main` build
-- `chandanankush/statix:<git-sha>` — immutable per-commit tag
+- `midnightappcoder/statix:latest` — always points to the most recent `main` build
+- `midnightappcoder/statix:<git-sha>` — immutable per-commit tag
 
 To pull a specific commit:
 ```sh
-docker pull chandanankush/statix:<sha>
+docker pull midnightappcoder/statix:<sha>
 ```
 
 ### Setting up Docker Hub secrets (one-time, repo owner only)

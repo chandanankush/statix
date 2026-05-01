@@ -10,7 +10,7 @@
 #
 set -euo pipefail
 
-IMAGE="chandanankush/statix:latest"
+IMAGE="midnightappcoder/statix:latest"
 CONTAINER="statix"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -87,7 +87,7 @@ elif docker image inspect "$IMAGE" &>/dev/null 2>&1; then
 else
     die "Image not available. Either Docker Hub is unreachable and no local cache exists,
      or the image has not been published yet.
-     Build it locally with: docker build -t chandanankush/statix server/"
+     Build it locally with: docker build -t midnightappcoder/statix server/"
 fi
 
 # ── stop and remove existing container ────────────────────────────────────────
