@@ -47,11 +47,11 @@ _free_port() {
     local port="$1"
     local pids=""
 
-    if command -v lsof &>/dev/null; then
-        pids=$(lsof -t -i TCP:"$port" -s TCP:LISTEN 2>/dev/null || true)
-    fi
-    if [[ -z "$pids" ]] && command -v fuser &>/dev/null; then
+    # Prefer fuser on Linux (always present); fall back to lsof (macOS / some Linux)
+    if command -v fuser &>/dev/null; then
         pids=$(fuser "${port}/tcp" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' || true)
+    elif command -v lsof &>/dev/null; then
+        pids=$(lsof -t -i TCP:"$port" -s TCP:LISTEN 2>/dev/null || true)
     fi
 
     if [[ -n "$pids" ]]; then
@@ -65,7 +65,9 @@ _free_port() {
             sleep 1
             waited=$((waited + 1))
             local still=""
-            if command -v lsof &>/dev/null; then
+            if command -v fuser &>/dev/null; then
+                still=$(fuser "${port}/tcp" 2>/dev/null || true)
+            elif command -v lsof &>/dev/null; then
                 still=$(lsof -t -i TCP:"$port" -s TCP:LISTEN 2>/dev/null || true)
             fi
             [[ -z "$still" ]] && break
