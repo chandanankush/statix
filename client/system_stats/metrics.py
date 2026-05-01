@@ -2,10 +2,6 @@
 from __future__ import annotations
 
 import datetime as dt
-
-# Increment this whenever the /system payload shape changes so the dashboard
-# can detect clients running old code.
-STATIX_CLIENT_VERSION = "1.1.0"
 import json
 import os
 import platform
@@ -18,6 +14,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import psutil
+
+
+# Version is written by the installer into ~/.local/share/statix/client_version
+# as the git SHA of the commit that was installed.  Falls back to "dev" when
+# running directly from source (e.g. during development).
+def _read_client_version() -> str:
+    try:
+        v = Path.home().joinpath(".local", "share", "statix", "client_version").read_text(encoding="ascii").strip()
+        return v if v else "dev"
+    except Exception:
+        return "dev"
+
+
+STATIX_CLIENT_VERSION: str = _read_client_version()
 
 
 def _as_dict(stats_obj: Any) -> Dict[str, Any]:

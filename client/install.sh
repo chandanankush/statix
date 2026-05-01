@@ -222,6 +222,16 @@ else
     success "Package installed"
 fi
 
+# ── write installed git SHA as client version ─────────────────────────────────
+# This file is read by metrics.py at runtime so the dashboard can detect stale clients.
+_INSTALLED_SHA=$(git ls-remote "https://github.com/${GITHUB_REPO}.git" "refs/heads/${GITHUB_BRANCH}" 2>/dev/null | cut -c1-7 || true)
+if [[ -n "$_INSTALLED_SHA" ]]; then
+    echo "$_INSTALLED_SHA" > "$(dirname "$VENV_DIR")/client_version"
+    info "Client version  : $_INSTALLED_SHA"
+else
+    warn "Could not determine installed git SHA (network issue?). Version tracking may show a mismatch warning."
+fi
+
 # ── set binary paths (always inside the venv) ────────────────────────────────
 SVC_BIN="$VENV_DIR/bin/system-stats-service"
 FWD_BIN="$VENV_DIR/bin/system-stats-forwarder"

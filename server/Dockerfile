@@ -4,7 +4,11 @@
 
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
+# Git SHA injected by CI (or manual build) so the dashboard can detect stale clients/servers.
+ARG GIT_SHA=dev
+ENV STATIX_SERVER_VERSION=$GIT_SHA \
+    STATIX_EXPECTED_CLIENT_VERSION=$GIT_SHA \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 RUN apt-get update \

@@ -14,13 +14,13 @@ from typing import Any, Dict, Iterable, List, Optional
 from flask import Flask, jsonify, render_template, request
 
 
-# Increment this whenever server.py or dashboard.html changes significantly.
-# The dashboard bakes this in as EXPECTED_SERVER_VERSION and warns on mismatch.
-SERVER_VERSION = "1.1.0"
+# Version is injected at Docker build time via GIT_SHA build arg → STATIX_SERVER_VERSION env var.
+# The fallback "dev" is used when running directly from source.
+SERVER_VERSION: str = os.getenv("STATIX_SERVER_VERSION", "dev")
 
 # Minimum client version the server considers fully compatible.
-# Bump this whenever client/system_stats/metrics.py adds new required fields.
-EXPECTED_CLIENT_VERSION = "1.1.0"
+# Injected at Docker build time alongside SERVER_VERSION — same SHA, same build.
+EXPECTED_CLIENT_VERSION: str = os.getenv("STATIX_EXPECTED_CLIENT_VERSION", "dev")
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = BASE_DIR / "data" / "metrics.db"
