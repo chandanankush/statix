@@ -252,16 +252,24 @@ if [[ ! -d "$VENV_DIR" ]]; then
     "$PYTHON" -m venv "$VENV_DIR"
 fi
 
-"$VENV_DIR/bin/pip" install --quiet --force-reinstall --no-deps "$PACKAGE_URL"
 if [[ "$IS_UPGRADE" == true ]]; then
+    # Upgrade: force-reinstall our package only; deps are already present in the venv
+    "$VENV_DIR/bin/pip" install --quiet --force-reinstall --no-deps "$PACKAGE_URL"
     success "Package upgraded"
 else
+    # Fresh install: install package and all dependencies
+    "$VENV_DIR/bin/pip" install --quiet "$PACKAGE_URL"
     success "Package installed"
 fi
 
 # ── write installed git SHA as client version ─────────────────────────────────
 # This file is read by metrics.py at runtime so the dashboard can detect stale clients.
+# Try git ls-remote first; fall back to GitHub API via curl (works even without git).
 _INSTALLED_SHA=$(git ls-remote "https://github.com/${GITHUB_REPO}.git" "refs/heads/${GITHUB_BRANCH}" 2>/dev/null | cut -c1-7 || true)
+if [[ -z "$_INSTALLED_SHA" ]] && command -v curl &>/dev/null; then
+    _INSTALLED_SHA=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}" 2>/dev/null \
+        | python3 -c "import json,sys; print(json.load(sys.stdin)['sha'][:7])" 2>/dev/null || true)
+fi
 if [[ -n "$_INSTALLED_SHA" ]]; then
     echo "$_INSTALLED_SHA" > "$(dirname "$VENV_DIR")/client_version"
     info "Client version  : $_INSTALLED_SHA"
