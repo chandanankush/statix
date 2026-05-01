@@ -3,6 +3,10 @@ name: Build & Publish statix to Docker Hub
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"           # any markdown file anywhere in the repo
+      - "AGENTS.md"
+      - "CONTRIBUTING.md"
   workflow_dispatch:   # allow manual trigger from GitHub UI
 
 env:
