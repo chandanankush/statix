@@ -3264,7 +3264,7 @@
                 } else if (latest && latest !== sv) {
                     _versionStatus.set('server', {level:'warn',
                         msg: `Server image is outdated (running: ${sv}, latest on main: ${latest}). ` +
-                             `Update: docker pull midnightappcoder/statix:latest && docker compose up -d`});
+                             `Update: bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)`});
                 } else if (latest && latest === sv) {
                     _versionStatus.set('server', {level:'ok',
                         msg: `Server is up to date (${sv}).`});
