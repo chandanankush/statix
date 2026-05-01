@@ -4,6 +4,20 @@ Guidelines for AI coding agents (GitHub Copilot, Claude, Cursor, etc.) working i
 
 ---
 
+## Documentation map
+
+There are **three README files** in this repo. Each is scoped to a different audience and layer. Always read the relevant one before making changes to that layer.
+
+| File | Scope | Use it when… |
+|---|---|---|
+| `README.md` | High-level user guide | You need to understand what statix is, how to install it end-to-end, or what the one-line commands are. This is the entry point for new users. |
+| `client/README.md` | Client agent only | You are working on `client/system_stats/`, `client/install.sh`, or `client/uninstall.sh`. Contains: install/uninstall commands, service management (launchd/systemd), all client env vars, the REST API surface (`GET /system`, `GET /health`), and the payload format sent to the server. |
+| `server/README.md` | Server only | You are working on `server/server.py`, `server/Dockerfile`, `server/install.sh`, `server/uninstall.sh`, or `server/templates/dashboard.html`. Contains: Docker Hub install command, Compose usage, all server env vars (including security vars), the full API endpoint table with auth requirements, Docker Hub tag strategy, and useful ops commands. |
+
+When a task touches **both** client and server, read all three. When updating env vars, config, or API surface, update the matching README(s) as part of the same change.
+
+---
+
 ## What this repo is
 
 **statix** is a self-hosted system monitoring stack:
@@ -190,5 +204,6 @@ curl "http://localhost:5050/data?hostname=test-host&timeframe=1h"
 - [ ] No `.innerHTML` with API-sourced strings in dashboard JS.
 - [ ] Bash scripts tested on macOS (bash 3.2) and on Raspberry Pi OS.
 - [ ] Dockerfile COPY paths are relative to `server/` build context.
-- [ ] `server/README.md` config table updated if new env vars were added.
+- [ ] `server/README.md` config table updated if new server env vars were added.
+- [ ] `client/README.md` config table updated if new client env vars were added.
 - [ ] `ARCHITECTURE.md` updated if the data flow or component list changed.
