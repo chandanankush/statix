@@ -32,12 +32,12 @@ else
 fi
 
 read -rp "  Remove the Docker image too? [y/N]: " remove_image
-if [[ "${remove_image,,}" == "y" ]]; then
+if [[ "$(echo "$remove_image" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
     docker rmi "$IMAGE:latest" 2>/dev/null && success "Image removed" || warn "Image not found locally"
 fi
 
 read -rp "  Remove data directory? This deletes all stored metrics. [y/N]: " remove_data
-if [[ "${remove_data,,}" == "y" ]]; then
+if [[ "$(echo "$remove_data" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
     data_dir="$HOME/.local/share/statix/data"
     if [[ -d "$data_dir" ]]; then
         rm -rf "$data_dir"

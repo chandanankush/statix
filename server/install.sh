@@ -80,8 +80,15 @@ info "Data directory : $DATA_DIR"
 
 # ── pull latest image ──────────────────────────────────────────────────────────
 header "Pulling $IMAGE …"
-docker pull "$IMAGE"
-success "Image up to date"
+if docker pull "$IMAGE" 2>/dev/null; then
+    success "Image pulled from Docker Hub"
+elif docker image inspect "$IMAGE" &>/dev/null 2>&1; then
+    warn "Could not reach Docker Hub — using locally cached image."
+else
+    die "Image not available. Either Docker Hub is unreachable and no local cache exists,
+     or the image has not been published yet.
+     Build it locally with: docker build -t chandanankush/statix server/"
+fi
 
 # ── stop and remove existing container ────────────────────────────────────────
 if docker inspect "$CONTAINER" &>/dev/null 2>&1; then
