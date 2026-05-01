@@ -172,12 +172,56 @@ def ensure_database() -> None:
         t.start()
         logging.info("Retention thread started: purging metrics older than %d days", RETENTION_DAYS)
 
+    # Start background thread to poll GitHub for the latest available SHA.
+    # Skip when running in dev mode (SERVER_VERSION == "dev") to avoid noise.
+    if SERVER_VERSION != "dev":
+        t2 = threading.Thread(target=_github_version_loop, name="github-version", daemon=True)
+        t2.start()
+        logging.info("GitHub version check thread started (repo: %s, branch: %s)", _GITHUB_REPO, _GITHUB_BRANCH)
+
 
 def _retention_loop() -> None:
     """Background thread: purge metrics rows older than RETENTION_DAYS once per hour."""
     while True:
         time.sleep(3600)
         _purge_old_metrics()
+
+
+# ── GitHub latest-version check ───────────────────────────────────────────────
+# Polls the GitHub API once per hour to discover whether a newer image has been
+# pushed to Docker Hub.  Exposed via /health so the dashboard can warn users
+# that their server container is stale without requiring any manual version bump.
+
+_GITHUB_REPO = "chandanankush/statix"
+_GITHUB_BRANCH = "main"
+_latest_github_sha: Optional[str] = None  # short SHA of latest commit on main
+_latest_github_sha_lock = threading.Lock()
+
+
+def _fetch_latest_github_sha() -> Optional[str]:
+    """Return the short SHA of the HEAD commit on the main branch, or None on error."""
+    url = f"https://api.github.com/repos/{_GITHUB_REPO}/commits/{_GITHUB_BRANCH}"
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.sha", "User-Agent": "statix-server"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            sha = resp.read().decode("ascii").strip()
+            return sha[:7] if len(sha) >= 7 else sha or None
+    except Exception:
+        return None
+
+
+def _github_version_loop() -> None:
+    """Background thread: refresh _latest_github_sha every hour."""
+    global _latest_github_sha
+    # Fetch immediately on startup so /health has data quickly.
+    sha = _fetch_latest_github_sha()
+    with _latest_github_sha_lock:
+        _latest_github_sha = sha
+    while True:
+        time.sleep(3600)
+        sha = _fetch_latest_github_sha()
+        with _latest_github_sha_lock:
+            _latest_github_sha = sha
 
 
 def _purge_old_metrics() -> None:
@@ -551,7 +595,14 @@ def dashboard():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": SERVER_VERSION, "expected_client_version": EXPECTED_CLIENT_VERSION})
+    with _latest_github_sha_lock:
+        latest = _latest_github_sha
+    return jsonify({
+        "status": "ok",
+        "version": SERVER_VERSION,
+        "expected_client_version": EXPECTED_CLIENT_VERSION,
+        "latest_version": latest,
+    })
 
 
 if __name__ == "__main__":

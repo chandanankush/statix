@@ -3247,6 +3247,19 @@
                     EXPECTED_CLIENT_VERSION = data.expected_client_version;
                 }
                 const sv = data.version || null;
+                const latest = data.latest_version || null;
+
+                // Warn if the running server image is behind the latest commit on main.
+                // Both values are short SHAs; skip comparison in dev mode ("dev").
+                if (sv && sv !== 'dev' && latest && latest !== sv) {
+                    _versionWarnings.set('server-outdated',
+                        `A newer server image is available (latest: ${latest}, running: ${sv}). ` +
+                        `Update with: docker pull midnightappcoder/statix:latest && docker compose up -d`);
+                } else {
+                    _versionWarnings.delete('server-outdated');
+                }
+
+                // Legacy self-consistency check (dashboard HTML vs running container).
                 if (sv && sv !== EXPECTED_SERVER_VERSION) {
                     _versionWarnings.set('server',
                         `Server is running v${sv} but dashboard expects v${EXPECTED_SERVER_VERSION}. ` +

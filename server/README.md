@@ -134,7 +134,7 @@ docker run -d \
 | `POST` | `/hosts/<hostname>/clean` | **Yes** | Delete metric history for a host (keeps host_details). |
 | `DELETE` | `/hosts/<hostname>` | **Yes** | Remove a host and all its data entirely. |
 | `GET` | `/dashboard` | No | Chart.js dashboard UI. |
-| `GET` | `/health` | No | Health check — returns `{"status": "ok", "version": "<sha>", "expected_client_version": "<sha>"}`. |
+| `GET` | `/health` | No | Health check — returns `{"status": "ok", "version": "<sha>", "expected_client_version": "<sha>", "latest_version": "<sha-or-null>"}`. `latest_version` is the current HEAD SHA on `main` from GitHub (cached 1 h, `null` when unreachable). The dashboard uses it to detect a stale server image. |
 
 "Auth required" applies only when `STATIX_API_KEY` is set. Pass the token as:
 ```
@@ -151,7 +151,9 @@ Each build bakes the git commit SHA into the image as environment variables via 
 - `STATIX_SERVER_VERSION` — the SHA of the server build
 - `STATIX_EXPECTED_CLIENT_VERSION` — the SHA the dashboard expects the client to be on (same commit, same repo)
 
-The dashboard reads these at startup via `/health` and shows a yellow warning banner if a connected client is on a different SHA. No manual version bumping is needed — every commit changes the SHA automatically.
+The dashboard reads these at startup via `/health` and shows a yellow warning banner if:
+- A connected client is on a different SHA than the server (`expected_client_version` check).
+- The running server image is behind the latest commit on `main` (`latest_version` vs `version` check — the server polls the GitHub API once per hour and caches the result in memory).
 
 To build locally and pass the SHA:
 ```sh
