@@ -51,7 +51,18 @@ if [[ -d "$VENV_DIR" ]]; then
     rm -rf "$HOME/.local/share/statix"
     success "Venv removed ($VENV_DIR)"
 else
-    warn "Venv not found at $VENV_DIR (already removed?)"
+    warn "Venv not found at $VENV_DIR (skipping)"
+fi
+
+# Fallback: clean up old pip --user installs (pre-venv versions of the installer)
+PYTHON=""
+for candidate in python3 python; do
+    command -v "$candidate" &>/dev/null && { PYTHON="$candidate"; break; }
+done
+if [[ -n "$PYTHON" ]] && "$PYTHON" -m pip show system-stats-service &>/dev/null 2>&1; then
+    "$PYTHON" -m pip uninstall -y system-stats-service 2>/dev/null || \
+        "$PYTHON" -m pip uninstall -y --break-system-packages system-stats-service 2>/dev/null || true
+    success "pip package removed"
 fi
 
 success "Uninstall complete."
