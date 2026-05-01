@@ -2104,14 +2104,36 @@
                 });
             }
 
-            const entries = Array.from(latestByHost.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
+            const autoMode = hostnameFilter.value === AUTO_CYCLE_VALUE;
+            const effectiveHostname = getEffectiveHostname();
             const nowSeconds = Math.floor(Date.now() / 1000);
             const offlineHosts = new Set();
+
+            // Single-host mode: just show the timestamp inline, hide the host list
+            if (!autoMode && effectiveHostname) {
+                hostUpdateList.style.display = 'none';
+                const entry = latestByHost.get(effectiveHostname);
+                const timestamp = entry ? (entry.timestamp || 0) : 0;
+                const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
+                if (timestamp) {
+                    lastUpdatedText.textContent = formatTimestamp(timestamp);
+                } else {
+                    lastUpdatedText.textContent = 'No data yet';
+                }
+                if (isOffline && timestamp) offlineHosts.add(effectiveHostname);
+                if (entry) updateOfflineTracking(effectiveHostname, isOffline);
+                applyOfflineHighlight(effectiveHostname, offlineHosts);
+                return;
+            }
+
+            // Auto-cycle mode: show all hosts in the list
+            hostUpdateList.style.display = '';
+            const entries = Array.from(latestByHost.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
 
             if (!entries.length) {
                 lastUpdatedText.textContent = 'No data yet';
                 hostUpdateList.innerHTML = '<li>No metrics available</li>';
-                applyOfflineHighlight(getEffectiveHostname(), offlineHosts);
+                applyOfflineHighlight(effectiveHostname, offlineHosts);
                 return;
             }
 
@@ -2126,7 +2148,6 @@
                 li.dataset.hostname = entry.hostname;
                 const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
 
-                // coloured dot indicator
                 const dot = document.createElement('span');
                 dot.className = isOffline ? 'dot-offline' : 'dot-online';
                 dot.textContent = '●';
@@ -2140,8 +2161,7 @@
                 );
                 li.appendChild(text);
                 if (isOffline) {
-                    const offlineNote = document.createTextNode(' (offline)');
-                    li.appendChild(offlineNote);
+                    li.appendChild(document.createTextNode(' (offline)'));
                     offlineHosts.add(entry.hostname);
                 }
                 hostUpdateList.appendChild(li);
