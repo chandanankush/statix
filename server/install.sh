@@ -81,12 +81,9 @@ else
     info "Keeping existing data dir : $DATA_DIR  (pass --data-dir to change)"
 fi
 
-# Only mkdir for plain host paths; Docker-managed named volumes don't need it
-# (and /var/lib/docker is root-owned — mkdir would fail).
-if [[ "$DATA_DIR" != /* ]]; then
-    # Named volume — Docker creates it automatically on first use.
-    true
-else
+# On upgrade the volume already exists (Docker manages it); only mkdir on fresh installs
+# to avoid hitting the root-owned /var/lib/docker path.
+if [[ "$IS_UPGRADE" != true ]]; then
     mkdir -p "$DATA_DIR"
 fi
 info "Dashboard port : $PORT"
