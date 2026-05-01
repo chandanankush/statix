@@ -672,31 +672,7 @@
         .dot-online  { color: #22c55e; margin-right: 6px; }
         .dot-offline { color: #f97316; margin-right: 6px; }
 
-        /* compare host multi-select — sits below the filters bar, not inside it */
-        #compareFilterControl {
-            max-width: 1080px;
-            margin: -12px auto 16px;
-            display: none;
-        }
-        #compareFilterControl label {
-            display: block;
-            margin-bottom: 4px;
-        }
-        #compareHostFilter {
-            padding: 6px 10px;
-            border-radius: 10px;
-            border: 1px solid var(--color-input-border);
-            background: var(--color-input-bg);
-            color: var(--color-text);
-            box-shadow: 0 6px 12px var(--color-input-shadow);
-            width: 100%;
-            transition: background 0.4s ease, color 0.3s ease, border-color 0.3s ease;
-        }
-        #compareHostFilter:focus {
-            outline: none;
-            border-color: var(--color-input-focus-border);
-            box-shadow: 0 0 0 3px var(--color-input-focus-ring);
-        }
+
     </style>
 </head>
 <body class="theme-light">
@@ -736,11 +712,6 @@
         </div>
     </section>
 
-    <div id="compareFilterControl">
-        <label for="compareHostFilter">Compare with (Ctrl/Cmd+click to select multiple hosts)</label>
-        <select id="compareHostFilter" multiple size="3">
-        </select>
-    </div>
         <div class="cards-grid">
             <article class="card">
                 <div class="card-header">
@@ -1351,27 +1322,6 @@
         });
         charts.push(netChart);
         refreshChartTheme();
-
-        // ── Compare host palette & controls ──────────────────────────────────
-        const COMPARE_PALETTE = ['#a855f7', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16'];
-        const compareHostFilter = document.getElementById('compareHostFilter');
-        const compareFilterControl = document.getElementById('compareFilterControl');
-
-        function populateCompareFilter(primaryHostname) {
-            if (!compareHostFilter) return;
-            compareHostFilter.innerHTML = '';
-            Array.from(knownHosts).filter(h => h !== primaryHostname).forEach(h => {
-                const opt = document.createElement('option');
-                opt.value = h;
-                opt.textContent = h;
-                compareHostFilter.appendChild(opt);
-            });
-        }
-
-        function getCompareHostnames() {
-            if (!compareHostFilter) return [];
-            return Array.from(compareHostFilter.selectedOptions).map(o => o.value);
-        }
 
         function buildQueryParams() {
             const params = new URLSearchParams();
@@ -2077,11 +2027,6 @@
                 const autoMode = hostnameFilter.value === AUTO_CYCLE_VALUE;
                 const effectiveHostname = getEffectiveHostname();
 
-                // Show/hide compare filter (only in single-host mode)
-                if (compareFilterControl) {
-                    compareFilterControl.style.display = (!autoMode && effectiveHostname) ? 'block' : 'none';
-                }
-
                 if (autoMode && !effectiveHostname) {
                     updateChartData(cpuChart, [], 'cpu');
                     updateChartData(ramChart, [], 'ram');
@@ -2101,61 +2046,8 @@
                 const payload = await response.json();
                 const metrics = payload.data || [];
 
-                // ── primary host datasets ──────────────────────────────────
-                const timeframe = timeframeFilter.value;
-                const labels = metrics.map(point => formatTimestamp(point.timestamp));
-
-                cpuChart.data.labels = labels;
-                cpuChart.data.datasets = [{
-                    label: `CPU % (${effectiveHostname || 'primary'})`,
-                    data: metrics.map(p => p.cpu),
-                    fill: false, borderColor: '#ff6384',
-                    backgroundColor: 'rgba(255,99,132,0.2)', tension: 0.25,
-                }];
-
-                ramChart.data.labels = labels;
-                ramChart.data.datasets = [{
-                    label: `RAM % (${effectiveHostname || 'primary'})`,
-                    data: metrics.map(p => p.ram),
-                    fill: false, borderColor: '#36a2eb',
-                    backgroundColor: 'rgba(54,162,235,0.2)', tension: 0.25,
-                }];
-
-                // ── compare host overlays (CPU + RAM only) ─────────────────
-                const compareHostnames = (!autoMode && effectiveHostname) ? getCompareHostnames() : [];
-                if (compareHostnames.length > 0) {
-                    const compareParams = new URLSearchParams();
-                    if (timeframe) compareParams.append('timeframe', timeframe);
-
-                    await Promise.all(compareHostnames.map(async (cHost, idx) => {
-                        const p = new URLSearchParams(compareParams);
-                        p.append('hostname', cHost);
-                        try {
-                            const resp = await fetch(`/data?${p.toString()}`);
-                            if (!resp.ok) return;
-                            const cPayload = await resp.json();
-                            const cMetrics = cPayload.data || [];
-                            const colour = COMPARE_PALETTE[idx % COMPARE_PALETTE.length];
-                            cpuChart.data.datasets.push({
-                                label: `CPU % (${cHost})`,
-                                data: cMetrics.map(p => ({ x: formatTimestamp(p.timestamp), y: p.cpu })),
-                                fill: false, borderColor: colour,
-                                backgroundColor: colour + '33', tension: 0.25,
-                                parsing: false,
-                            });
-                            ramChart.data.datasets.push({
-                                label: `RAM % (${cHost})`,
-                                data: cMetrics.map(p => ({ x: formatTimestamp(p.timestamp), y: p.ram })),
-                                fill: false, borderColor: colour,
-                                backgroundColor: colour + '33', tension: 0.25,
-                                parsing: false,
-                            });
-                        } catch (_) { /* individual host fetch failure is non-fatal */ }
-                    }));
-                }
-
-                cpuChart.update('none');
-                ramChart.update('none');
+                updateChartData(cpuChart, metrics, 'cpu');
+                updateChartData(ramChart, metrics, 'ram');
                 updateDiskChart(metrics);
                 updateNetChart(metrics);
 
@@ -2191,8 +2083,6 @@
                 setCurrentAutoHostname(hostnameFilter.value);
             }
 
-            populateCompareFilter(hostnameFilter.value);
-
             fetchMetrics();
             const selected = getEffectiveHostname();
             if (selected) {
@@ -2202,9 +2092,6 @@
             }
         });
         timeframeFilter.addEventListener('change', fetchMetrics);
-        if (compareHostFilter) {
-            compareHostFilter.addEventListener('change', fetchMetrics);
-        }
 
         if (timeframeFilter.value === '' && timeframePresets[defaultTimeframe]) {
             timeframeFilter.value = defaultTimeframe;
