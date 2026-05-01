@@ -818,6 +818,7 @@
         <div>
             <span class="status-label">Last data received:</span>
             <span id="lastUpdatedText">No data yet</span>
+            <span id="hostOnlineStatus" style="margin-left:12px"></span>
         </div>
         <ul id="hostUpdateList" class="status-hostlist" style="display:none"></ul>
     </section>
@@ -2110,6 +2111,16 @@
 
             const isOffline = timestamp === 0 || nowSeconds - timestamp >= OFFLINE_THRESHOLD_SECONDS;
             lastUpdatedText.textContent = timestamp ? formatTimestamp(timestamp) : 'No data yet';
+            const statusBadge = document.getElementById('hostOnlineStatus');
+            if (statusBadge) {
+                if (!timestamp) {
+                    statusBadge.textContent = '';
+                } else if (isOffline) {
+                    statusBadge.innerHTML = '<span class="dot-offline" aria-hidden="true">●</span><span style="color:var(--color-card-muted);font-size:0.88rem">Offline</span>';
+                } else {
+                    statusBadge.innerHTML = '<span class="dot-online" aria-hidden="true">●</span><span style="color:var(--color-card-muted);font-size:0.88rem">Online</span>';
+                }
+            }
             if (isOffline && timestamp) offlineHosts.add(effectiveHostname);
             updateOfflineTracking(effectiveHostname, isOffline);
             applyOfflineHighlight(effectiveHostname, offlineHosts);
