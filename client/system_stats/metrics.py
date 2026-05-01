@@ -50,9 +50,15 @@ def _detect_hardware_model(system_name: str) -> Optional[str]:
             )
             return result.stdout.strip() or None
         if system_name == "Linux":
-            product_path = Path("/sys/devices/virtual/dmi/id/product_name")
-            if product_path.exists():
-                return product_path.read_text(encoding="utf-8", errors="ignore").strip() or None
+            # Raspberry Pi — device tree (arm/arm64, no DMI)
+            dt_model = Path("/proc/device-tree/model")
+            if dt_model.exists():
+                val = dt_model.read_text(encoding="utf-8", errors="ignore").rstrip("\x00").strip()
+                return val or None
+            # x86 / generic Linux — DMI product name
+            dmi_path = Path("/sys/devices/virtual/dmi/id/product_name")
+            if dmi_path.exists():
+                return dmi_path.read_text(encoding="utf-8", errors="ignore").strip() or None
     except Exception:  # pragma: no cover - best effort hardware detection
         return None
     return None
@@ -108,6 +114,37 @@ def _macos_link_speed_mbps(iface_name: str) -> Optional[float]:
     return None
 
 
+def _linux_wifi_speed_mbps(iface_name: str) -> Optional[float]:
+    """Return the current bitrate for a Linux wireless interface via `iw`.
+
+    `iw dev <iface> link` outputs a line like:
+      tx bitrate: 72.2 MBit/s
+    Returns None if `iw` is absent, the interface is not associated, or any
+    error occurs.  Safe on Pi OS (Debian) and any other Linux distro.
+    """
+    iw = shutil.which("iw")
+    if not iw:
+        return None
+    try:
+        result = subprocess.run(
+            [iw, "dev", iface_name, "link"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            m = re.search(r"tx bitrate:\s*([\d.]+)\s*(G|M|K)?Bit", line, re.IGNORECASE)
+            if m:
+                speed = float(m.group(1))
+                unit = (m.group(2) or "M").upper()
+                if unit == "G":
+                    speed *= 1000
+                elif unit == "K":
+                    speed /= 1000
+                return speed
+    except Exception:
+        pass
+    return None
+
+
 def _primary_network_interface() -> Optional[Dict[str, Any]]:
     stats = psutil.net_if_stats()
     addrs = psutil.net_if_addrs()
@@ -127,6 +164,8 @@ def _primary_network_interface() -> Optional[Dict[str, Any]]:
         speed = stat.speed if stat.speed and stat.speed > 0 else None
         if speed is None and platform.system() == "Darwin":
             speed = _macos_link_speed_mbps(name)
+        elif speed is None and platform.system() == "Linux":
+            speed = _linux_wifi_speed_mbps(name)
         return {
             "name": name,
             "ipv4": inet_info.address,
@@ -158,6 +197,8 @@ def _all_network_interfaces() -> List[Dict[str, Any]]:
         speed = stat.speed if stat.speed and stat.speed > 0 else None
         if speed is None and platform.system() == "Darwin":
             speed = _macos_link_speed_mbps(name)
+        elif speed is None and platform.system() == "Linux":
+            speed = _linux_wifi_speed_mbps(name)
         interfaces.append({
             "name": name,
             "ipv4": inet_info.address,
@@ -259,7 +300,11 @@ def _get_os_updates() -> Dict[str, Any]:
 
 
 def _check_docker_image_update_now(docker_bin: str, image: str) -> Optional[bool]:
-    """Return True if a newer image is available, False if up-to-date, None if unknown."""
+    """Return True if a newer image is available, False if up-to-date, None if unknown.
+
+    Uses `docker pull --dry-run` (Docker CLI 24.0+).  Falls back gracefully to
+    None on older Docker versions or any other failure — never raises.
+    """
     try:
         result = subprocess.run(
             [docker_bin, "pull", "--dry-run", image],
@@ -267,9 +312,11 @@ def _check_docker_image_update_now(docker_bin: str, image: str) -> Optional[bool
             text=True,
             timeout=20,
         )
-        if result.returncode == 0:
-            output = result.stdout + result.stderr
-            return "Downloaded newer image" in output or "Pull complete" in output
+        # Older Docker (<24): unknown flag error → returncode != 0 → return None
+        if result.returncode != 0:
+            return None
+        output = result.stdout + result.stderr
+        return "Downloaded newer image" in output or "Pull complete" in output
     except Exception:
         pass
     return None
