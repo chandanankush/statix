@@ -26,6 +26,7 @@ statix is deliberately built with a small, readable stack — no magic framework
 | **Multi-arch Docker builds** — `linux/amd64` + `linux/arm64` via buildx | `.github/workflows/docker-publish.yml` |
 | **GitHub Actions** — Docker Hub push, path-filtered triggers, manual dispatch | `.github/workflows/docker-publish.yml` |
 | **Service management** — launchd (macOS), systemd --user (Linux), auto-restart | `client/service/` templates, `client/install.sh` |
+| **Subprocess + graceful no-op** — running external tools (`docker ps`), probing fallback paths, handling "not installed" and "daemon down" as non-fatal conditions | `client/system_stats/metrics.py` → `_find_docker()`, `get_docker_info()` |
 
 ---
 
@@ -190,7 +191,8 @@ The following improvements are not yet implemented and would make good first con
 | Authentication on the dashboard UI | Medium | Currently only protects the delete/clean endpoints |
 | Prometheus `/metrics` endpoint | Medium | Add an exporter alongside `/data` |
 | Time-zone aware timestamps | Easy | Store UTC, convert in dashboard |
-| Dark mode toggle | Easy | CSS variable swap in `dashboard.html` |
+| Dark mode toggle | Easy | CSS variable swap in `dashboard.html` — **implemented** |
+| Docker container monitoring | Easy | Subprocess-based collection via `docker ps --all`; graceful no-op when Docker is absent — **implemented** |
 | PostgreSQL backend | Hard | Abstraction layer in `server.py`, Docker Compose update |
 | Alertmanager integration | Hard | Pub/sub or webhook from the server on threshold breach |
 

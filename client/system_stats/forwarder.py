@@ -49,7 +49,10 @@ def post_metrics(url: str, payload: Dict[str, Any]) -> None:
 
 def run_forwarder() -> None:
     system_stats_url = get_env("SYSTEM_STATS_URL", DEFAULT_SYSTEM_STATS_URL)
-    metrics_url = get_env("MONITORING_SERVER_METRICS_URL", DEFAULT_MONITORING_METRICS_URL)
+    # Support comma-separated list of destinations in a single env var.
+    # A single URL works exactly as before (backward compatible).
+    raw_urls = get_env("MONITORING_SERVER_METRICS_URL", DEFAULT_MONITORING_METRICS_URL)
+    metrics_urls = [u.strip() for u in raw_urls.split(",") if u.strip()]
     interval = float(get_env("SYSTEM_STATS_FORWARD_INTERVAL", str(DEFAULT_INTERVAL_SECONDS)))
 
     logging.basicConfig(
@@ -57,10 +60,10 @@ def run_forwarder() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     logging.info(
-        "Forwarder started: polling %s every %.1fs -> %s",
+        "Forwarder started: polling %s every %.1fs -> [%s]",
         system_stats_url,
         interval,
-        metrics_url,
+        ", ".join(metrics_urls),
     )
 
     last_disk_io: Dict[str, Any] | None = None
@@ -95,7 +98,11 @@ def run_forwarder() -> None:
             )
 
             payload = transform_payload(stats, throughput)
-            post_metrics(metrics_url, payload)
+            for url in metrics_urls:
+                try:
+                    post_metrics(url, payload)
+                except Exception as exc:  # pylint: disable=broad-except
+                    logging.warning("Failed to forward to %s: %s", url, exc)
             logging.info(
                 "Forwarded metrics cpu=%.1f%% ram=%.1f%% disk=%.1f%% read=%.2fMB/s write=%.2fMB/s",
                 payload["cpu"],

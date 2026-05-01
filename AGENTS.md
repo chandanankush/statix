@@ -11,7 +11,7 @@ There are **three README files** in this repo. Each is scoped to a different aud
 | File | Scope | Use it when… |
 |---|---|---|
 | `README.md` | High-level user guide | You need to understand what statix is, how to install it end-to-end, or what the one-line commands are. This is the entry point for new users. |
-| `client/README.md` | Client agent only | You are working on `client/system_stats/`, `client/install.sh`, or `client/uninstall.sh`. Contains: install/uninstall commands, service management (launchd/systemd), all client env vars, the REST API surface (`GET /system`, `GET /health`), and the payload format sent to the server. |
+| `client/README.md` | Client agent only | You are working on `client/system_stats/`, `client/install.sh`, or `client/uninstall.sh`. Contains: install/uninstall commands, service management (launchd/systemd), all client env vars, the REST API surface (`GET /system`, `GET /health`), and the payload format sent to the server. `GET /system` includes a `docker` key with container counts and per-container details (or `available: false` with an error code when Docker is absent or the daemon is down). |
 | `server/README.md` | Server only | You are working on `server/server.py`, `server/Dockerfile`, `server/install.sh`, `server/uninstall.sh`, or `server/templates/dashboard.html`. Contains: Docker Hub install command, Compose usage, all server env vars (including security vars), the full API endpoint table with auth requirements, Docker Hub tag strategy, and useful ops commands. |
 
 When a task touches **both** client and server, read all three. When updating env vars, config, or API surface, update the matching README(s) as part of the same change.
@@ -139,7 +139,7 @@ statix/
 | `SYSTEM_STATS_HOST` | `0.0.0.0` | FastAPI bind address |
 | `SYSTEM_STATS_PORT` | `5001` | FastAPI port |
 | `SYSTEM_STATS_LOG_LEVEL` | `info` | uvicorn log level |
-| `MONITORING_SERVER_METRICS_URL` | `http://192.168.0.209:5050/metrics` | Forwarder destination |
+| `MONITORING_SERVER_METRICS_URL` | `http://192.168.0.209:5050/metrics` | Forwarder destination(s). Accepts a single URL or a comma-separated list for multi-server forwarding. Each destination fails independently. |
 | `SYSTEM_STATS_FORWARD_INTERVAL` | `30` | Poll interval (seconds) |
 | `SYSTEM_STATS_DISK_PATH` | `/` | Disk mount to report |
 

@@ -609,6 +609,64 @@
                 max-height: 260px;
             }
         }
+
+        .docker-container-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .docker-container-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--color-progress-bg);
+            gap: 12px;
+        }
+
+        .docker-container-info {
+            min-width: 0;
+        }
+
+        .docker-container-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--color-card-text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .docker-container-image {
+            font-size: 0.82rem;
+            color: var(--color-card-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .docker-state-badge {
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .docker-state-running  { background: rgba(52,  211, 153, 0.18); color: #059669; }
+        .docker-state-exited   { background: rgba(248, 113, 113, 0.18); color: #dc2626; }
+        .docker-state-paused   { background: rgba(251, 191,  36, 0.18); color: #d97706; }
+        .docker-state-other    { background: rgba(148, 163, 184, 0.18); color: var(--color-card-muted); }
+
+        body.theme-dark .docker-state-running { background: rgba(52,  211, 153, 0.25); color: #34d399; }
+        body.theme-dark .docker-state-exited  { background: rgba(248, 113, 113, 0.25); color: #f87171; }
+        body.theme-dark .docker-state-paused  { background: rgba(251, 191,  36, 0.25); color: #fbbf24; }
     </style>
 </head>
 <body class="theme-light">
@@ -742,6 +800,22 @@
                     <div class="stat-foot" id="uptimeBoot">—</div>
                 </div>
             </article>
+
+            <article class="card">
+                <div class="card-header">
+                    <div class="card-icon">🐳</div>
+                    <h3>Docker</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stat-grid">
+                        <div class="stat-row">
+                            <span class="stat-label">Status</span>
+                            <span class="stat-value" id="dockerStatus">—</span>
+                        </div>
+                    </div>
+                    <div class="docker-container-list" id="dockerContainerList"></div>
+                </div>
+            </article>
         </div>
     </section>
 
@@ -831,6 +905,7 @@
             networkMtu: document.getElementById('networkMtu'),
             uptimeHuman: document.getElementById('uptimeHuman'),
             uptimeBoot: document.getElementById('uptimeBoot'),
+            dockerStatus: document.getElementById('dockerStatus'),
         };
 
         const progressBars = {
@@ -1436,6 +1511,66 @@
             return '—';
         }
 
+        function renderDockerCard(docker) {
+            const statusEl = detailElements.dockerStatus;
+            const listEl = document.getElementById('dockerContainerList');
+
+            if (!docker) {
+                if (statusEl) statusEl.textContent = '—';
+                if (listEl) { while (listEl.firstChild) listEl.removeChild(listEl.firstChild); }
+                return;
+            }
+
+            if (!docker.available) {
+                const errorLabels = {
+                    not_installed: 'Not installed',
+                    daemon_not_running: 'Daemon not running',
+                    timeout: 'Timed out',
+                    permission_denied: 'Permission denied',
+                };
+                if (statusEl) statusEl.textContent = errorLabels[docker.error] || 'Unavailable';
+                if (listEl) { while (listEl.firstChild) listEl.removeChild(listEl.firstChild); }
+                return;
+            }
+
+            const running = typeof docker.running === 'number' ? docker.running : 0;
+            const total = typeof docker.total === 'number' ? docker.total : 0;
+            if (statusEl) statusEl.textContent = `${running} running / ${total} total`;
+
+            if (!listEl) return;
+            while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+
+            const containers = docker.containers || [];
+            containers.forEach(container => {
+                const item = document.createElement('div');
+                item.className = 'docker-container-item';
+
+                const info = document.createElement('div');
+                info.className = 'docker-container-info';
+
+                const nameEl = document.createElement('div');
+                nameEl.className = 'docker-container-name';
+                nameEl.textContent = container.name || container.id || '—';
+
+                const imageEl = document.createElement('div');
+                imageEl.className = 'docker-container-image';
+                imageEl.textContent = container.image || '—';
+
+                info.appendChild(nameEl);
+                info.appendChild(imageEl);
+
+                const state = (container.state || '').toLowerCase();
+                const validStates = ['running', 'exited', 'paused'];
+                const badge = document.createElement('span');
+                badge.className = `docker-state-badge docker-state-${validStates.includes(state) ? state : 'other'}`;
+                badge.textContent = container.state || '—';
+
+                item.appendChild(info);
+                item.appendChild(badge);
+                listEl.appendChild(item);
+            });
+        }
+
         function renderHostDetails(details) {
             const cpu = details.cpu || {};
             setDetailField('cpuProcessor', cpu.processor || '—');
@@ -1504,6 +1639,8 @@
             setDetailField('uptimeHuman', uptime.human || '—');
             const bootString = uptime.boot_time ? `Booted ${formatDateTime(uptime.boot_time)}` : 'Boot time unavailable';
             setDetailField('uptimeBoot', bootString);
+
+            renderDockerCard(details.docker || null);
         }
 
         function hideDetails() {

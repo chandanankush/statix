@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import platform
+import shutil
 import socket
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import psutil
 
@@ -92,6 +94,77 @@ def _resolve_root_path() -> Path:
     return Path("/")
 
 
+_DOCKER_FALLBACK_PATHS = (
+    "/usr/local/bin/docker",           # Docker Desktop on macOS (Intel / Rosetta)
+    "/opt/homebrew/bin/docker",        # Homebrew docker on Apple Silicon
+    "/Applications/Docker.app/Contents/Resources/bin/docker",
+)
+
+
+def _find_docker() -> Optional[str]:
+    """Return the docker executable path, or None if not found.
+
+    shutil.which covers PATH (works in interactive shells and Linux systemd).
+    The fallback list covers macOS launchd, which runs with a restricted PATH.
+    """
+    found = shutil.which("docker")
+    if found:
+        return found
+    for candidate in _DOCKER_FALLBACK_PATHS:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def _collect_docker_info() -> Dict[str, Any]:
+    """Return Docker container status, or an unavailable marker if Docker is absent/down."""
+    docker_bin = _find_docker()
+    if docker_bin is None:
+        return {"available": False, "error": "not_installed"}
+    try:
+        result = subprocess.run(
+            [docker_bin, "ps", "--all", "--format", "{{json .}}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except PermissionError:
+        return {"available": False, "error": "permission_denied"}
+    except subprocess.TimeoutExpired:
+        return {"available": False, "error": "timeout"}
+    except Exception:
+        return {"available": False, "error": "unknown"}
+
+    if result.returncode != 0:
+        return {"available": False, "error": "daemon_not_running"}
+
+    containers: List[Dict[str, Any]] = []
+    for line in result.stdout.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        containers.append({
+            "id": raw.get("ID", ""),
+            "name": raw.get("Names", "").lstrip("/"),
+            "image": raw.get("Image", ""),
+            "state": raw.get("State", ""),
+            "status": raw.get("Status", ""),
+            "ports": raw.get("Ports", ""),
+        })
+
+    running = sum(1 for c in containers if c["state"] == "running")
+    return {
+        "available": True,
+        "running": running,
+        "total": len(containers),
+        "containers": containers,
+    }
+
+
 def collect_system_metrics() -> Dict[str, Any]:
     """Gather CPU, memory, disk, network, and uptime data from the host."""
     cpu_percent = psutil.cpu_percent(interval=0.1)
@@ -150,4 +223,5 @@ def collect_system_metrics() -> Dict[str, Any]:
             "platform": platform.platform(),
             "model": model,
         },
+        "docker": _collect_docker_info(),
     }

@@ -83,7 +83,7 @@ All settings are environment variables. The installer writes them into the servi
 | `SYSTEM_STATS_PORT` | `5001` | Port for the FastAPI service. |
 | `SYSTEM_STATS_LOG_LEVEL` | `info` | Log level for the FastAPI service. |
 | `SYSTEM_STATS_URL` | `http://127.0.0.1:5001/system` | Forwarder source endpoint. |
-| `MONITORING_SERVER_METRICS_URL` | `http://192.168.0.209:5050/metrics` | Forwarder destination on the monitoring server. |
+| `MONITORING_SERVER_METRICS_URL` | `http://192.168.0.209:5050/metrics` | Forwarder destination(s). Accepts a single URL or a comma-separated list (e.g. `http://192.168.0.209:5050/metrics,http://127.0.0.1:5050/metrics`). Each destination is tried independently; one unreachable server does not block the others. |
 | `SYSTEM_STATS_FORWARD_INTERVAL` | `30` | Seconds between polls. |
 | `SYSTEM_STATS_FORWARD_LOG_LEVEL` | `INFO` | Log level for the forwarder. |
 | `SYSTEM_STATS_DISK_PATH` | `/` | Root path for disk usage (override for non-root mounts). |
@@ -112,7 +112,17 @@ Returns a full snapshot of the host. Example response:
     "primary_interface": { "name": "en0", "ipv4": "192.168.0.82", "speed_mbps": 1000 }
   },
   "uptime": { "seconds": 37422, "human": "10h 23m", "boot_time": "2026-05-01T00:59:22+05:30" },
-  "system": { "hostname": "chandan-mac-mini.local", "os": "Darwin", "model": "Mac16,11" }
+  "system": { "hostname": "chandan-mac-mini.local", "os": "Darwin", "model": "Mac16,11" },
+  "docker": {
+    "available": true,
+    "running": 2,
+    "total": 3,
+    "containers": [
+      {"id": "abc123def456", "name": "statix-statix-1", "image": "midnightappcoder/statix:latest", "state": "running", "status": "Up 4 minutes", "ports": "0.0.0.0:5050->5000/tcp"},
+      {"id": "789ghi012jkl", "name": "statix-db-1", "image": "postgres:15", "state": "running", "status": "Up 4 minutes", "ports": ""},
+      {"id": "mno345pqr678", "name": "old-container", "image": "nginx:latest", "state": "exited", "status": "Exited (0) 2 days ago", "ports": ""}
+    ]
+  }
 }
 ```
 
