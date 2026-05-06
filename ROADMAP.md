@@ -98,7 +98,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 ---
 
-### P1-5 · All System Temperature Sensors
+### P1-5 · All System Temperature Sensors ✅ Shipped
 
 **Gap:** The agent already calls `psutil.sensors_temperatures()` but discards everything except the single CPU sensor. GPU, NVMe, SSD, and motherboard temperatures are silently dropped.
 
@@ -106,10 +106,11 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **What competition does:** Surfaces all detected temperature sensors; supports allowlist/blocklist patterns.
 
-**Scope of change:**
-- Agent: return the full `sensors_temperatures()` dict instead of only the CPU entry. Each entry is `{sensor_name: [{label, current_c, high_c, critical_c}]}`.
-- Dashboard: a "Temperatures" card listing every sensor by name with color coding (green / amber / red based on `high_c` and `critical_c` thresholds if available); hidden entirely when no sensors are detected.
-- Optional: `STATIX_SENSOR_INCLUDE` / `STATIX_SENSOR_EXCLUDE` env vars for glob filtering.
+**What was built:**
+- Agent (`metrics.py`): new `_get_all_sensors()` function calls `psutil.sensors_temperatures()` and returns `{sensor_name: [{label, current_c, high_c, critical_c}]}`. Returns `null` on macOS and Windows where the API is unavailable. Added as `"sensors"` key in the `/system` response — carried to the server in the `details` blob.
+- Dashboard: new **Temperatures** card (`data-widget="temperatures"`) hidden entirely when `details.sensors` is null or empty. When sensors are present, groups readings by sensor name; each row color-codes the current reading — green (below 90% of `high_c`), amber (≥90% of `high_c`), red (≥90% of `critical_c`). Registered in `CARD_WIDGETS` drag/hide panel.
+- No server changes needed — sensor data rides in the existing `details` JSON blob.
+- Note: `STATIX_SENSOR_INCLUDE`/`STATIX_SENSOR_EXCLUDE` env-var filtering remains a future enhancement.
 
 ---
 
@@ -475,7 +476,7 @@ The following items also appear in competition but were not in the original prio
 | ✅ P1-2 | System load average | Phase 1 — Low effort / High value | Low |
 | P1-3 ✅ | Per-core CPU breakdown | Phase 1 — Low effort / High value | Low |
 | P1-4 ✅ | 30-day timeframe selector in dashboard | Phase 1 — Low effort / High value | Low |
-| P1-5 | All system temperature sensors | Phase 1 — Low effort / High value | Low |
+| P1-5 ✅ | All system temperature sensors | Phase 1 — Low effort / High value | Low |
 | P2-1 | Expanded alerts + multi-channel notifications | Phase 2 — Medium effort / High value | Medium |
 | P2-2 | Per-container resource metrics | Phase 2 — Medium effort / High value | Medium |
 | P2-3 | S.M.A.R.T. disk health | Phase 2 — Medium effort / High value | Medium |

@@ -529,6 +529,32 @@ def _get_load_average() -> Optional[Dict[str, float]]:
         return None
 
 
+def _get_all_sensors() -> Optional[Dict[str, List[Dict[str, Any]]]]:
+    """Return all temperature sensors as {sensor_name: [{label, current_c, high_c, critical_c}]}.
+
+    Returns None on macOS and Windows where psutil.sensors_temperatures() is unavailable.
+    """
+    try:
+        raw = psutil.sensors_temperatures()
+    except AttributeError:
+        return None
+    if not raw:
+        return None
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for sensor_name, entries in raw.items():
+        readings = []
+        for e in entries:
+            readings.append({
+                "label": e.label if e.label else sensor_name,
+                "current_c": round(e.current, 1),
+                "high_c": round(e.high, 1) if e.high is not None else None,
+                "critical_c": round(e.critical, 1) if e.critical is not None else None,
+            })
+        if readings:
+            result[sensor_name] = readings
+    return result or None
+
+
 def collect_system_metrics() -> Dict[str, Any]:
     """Gather CPU, memory, disk, network, and uptime data from the host."""
     cpu_percents = psutil.cpu_percent(percpu=True, interval=0.1)
@@ -594,6 +620,7 @@ def collect_system_metrics() -> Dict[str, Any]:
             "os_update": _get_os_updates(),
         },
         "load_avg": _get_load_average(),
+        "sensors": _get_all_sensors(),
         "docker": _collect_docker_info(),
         "statix_client_version": STATIX_CLIENT_VERSION,
     }
