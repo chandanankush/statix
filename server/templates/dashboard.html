@@ -1614,7 +1614,7 @@
         </div>
         <div class="chart-container" data-widget="chart-net">
             <div class="chart-header">
-                <h2>Network I/O (MB/s)</h2>
+                <h2>Network I/O (Mbps)</h2>
                 <span class="drag-handle" title="Drag to reorder">⣿</span>
             </div>
             <canvas id="netChart"></canvas>
@@ -2181,7 +2181,7 @@
                 labels: [],
                 datasets: [
                     {
-                        label: 'Net In (MB/s)',
+                        label: 'Net In (Mbps)',
                         data: [],
                         fill: false,
                         borderColor: '#8b5cf6',
@@ -2189,7 +2189,7 @@
                         tension: 0.25,
                     },
                     {
-                        label: 'Net Out (MB/s)',
+                        label: 'Net Out (Mbps)',
                         data: [],
                         fill: false,
                         borderColor: '#ec4899',
@@ -2219,7 +2219,7 @@
                     },
                     y: {
                         beginAtZero: true,
-                        ticks: { callback: (v) => `${v} MB/s`, color: currentChartStyles.text },
+                        ticks: { callback: (v) => `${v} Mbps`, color: currentChartStyles.text },
                         grid: { color: currentChartStyles.grid },
                     },
                 },
@@ -2405,8 +2405,8 @@
         function updateNetChart(metrics) {
             const labels = metrics.map(point => formatChartLabel(point.timestamp));
             netChart.data.labels = labels;
-            netChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.net_read));
-            netChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.net_write));
+            netChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.net_read) * 8);
+            netChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.net_write) * 8);
             netChart.update('none');
         }
 
@@ -3406,7 +3406,7 @@
             { id: 'chart-load',      name: 'Load Average' },
             { id: 'chart-ram',       name: 'Memory (%)' },
             { id: 'chart-disk',      name: 'Disk I/O (MB/s)' },
-            { id: 'chart-net',       name: 'Network I/O (MB/s)' },
+            { id: 'chart-net',       name: 'Network I/O (Mbps)' },
         ];
         const LS_CARD_ORDER   = 'statix_card_order';
         const LS_CARD_HIDDEN  = 'statix_card_hidden';
