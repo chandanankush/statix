@@ -136,7 +136,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 ---
 
-### P2-2 · Per-Container Resource Metrics
+### P2-2 · Per-Container Resource Metrics ✅ Shipped
 
 **Gap:** The agent calls `docker ps` and checks for image updates, but never queries container CPU %, memory, or network I/O. You cannot tell which container is eating your RAM.
 
@@ -144,11 +144,11 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **What competition does:** Polls `docker stats` per container and stores time-series data for each; renders a collapsible per-container panel.
 
-**Scope of change:**
-- Agent: call `docker stats --no-stream --format json` for all running containers; return a list of `{name, cpu_pct, mem_used_bytes, mem_limit_bytes, net_rx_bytes, net_tx_bytes}`.
-- Agent: respect `STATIX_EXCLUDE_CONTAINERS` env var (comma-separated glob patterns) to omit infra/noise containers.
-- Server: new `container_metrics` table keyed by `(hostname, container_name, timestamp)`.
-- Dashboard: collapsible container panel per host with current-value bars and optionally mini time-series sparklines.
+**What was built:**
+- Agent (`metrics.py`): `_fetch_container_stats()` calls `docker stats --no-stream --format "{{json .}}"` for all running containers; parses CPU %, memory (used/limit bytes + %), and net I/O (rx/tx bytes). Result cached 20 s to absorb the ~1 s kernel sampling delay without impacting every `/system` poll. Stats merged into each container entry as `container.stats`.
+- Agent: `STATIX_EXCLUDE_CONTAINERS` env var (comma-separated glob patterns via `fnmatch`) filters containers from both the list and stats collection before they reach the dashboard.
+- Dashboard: Docker card restructured with a header row (name + state badge) and a stats row below each running container — CPU bar (cyan/amber/red) and memory bar (blue/amber/red) with `used / limit` byte labels.
+- Server / time-series sparklines: deferred — current snapshot via the `details` blob covers the primary use case. A dedicated `container_metrics` table with sparklines remains a future enhancement.
 
 ---
 
@@ -478,7 +478,7 @@ The following items also appear in competition but were not in the original prio
 | P1-4 ✅ | 30-day timeframe selector in dashboard | Phase 1 — Low effort / High value | Low |
 | P1-5 ✅ | All system temperature sensors | Phase 1 — Low effort / High value | Low |
 | P2-1 | Expanded alerts + multi-channel notifications | Phase 2 — Medium effort / High value | Medium |
-| P2-2 | Per-container resource metrics | Phase 2 — Medium effort / High value | Medium |
+| P2-2 ✅ | Per-container resource metrics | Phase 2 — Medium effort / High value | Medium |
 | P2-3 | S.M.A.R.T. disk health | Phase 2 — Medium effort / High value | Medium |
 | P2-4 | Per-host alert configuration | Phase 2 — Medium effort / High value | Medium |
 | P3-1 | Multi-user accounts | Phase 3 — Larger effort / Optional | High |

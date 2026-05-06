@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import fnmatch
 import json
 import os
 import platform
@@ -237,6 +238,37 @@ _DOCKER_FALLBACK_PATHS = (
 # ── update-check cache (TTL = 24 h) ──────────────────────────────────────────
 _UPDATE_CACHE_TTL: int = 24 * 3600  # seconds
 _SPEED_CACHE_TTL: int = 5 * 60      # 5 minutes — WiFi TX rate changes gradually
+_DOCKER_STATS_CACHE_TTL: int = 20   # seconds — docker stats --no-stream takes ~1 s
+
+# ── docker stats size/percent parsers ────────────────────────────────────────
+_DOCKER_SIZE_RE = re.compile(r"^([\d.]+)\s*([A-Za-z]+)$")
+_DOCKER_SIZE_UNITS: Dict[str, int] = {
+    "b": 1,
+    "kb": 1_000,           "kib": 1_024,
+    "mb": 1_000_000,       "mib": 1_048_576,
+    "gb": 1_000_000_000,   "gib": 1_073_741_824,
+    "tb": 1_000_000_000_000, "tib": 1_099_511_627_776,
+}
+
+
+def _parse_docker_size(s: str) -> Optional[int]:
+    m = _DOCKER_SIZE_RE.match(s.strip())
+    if not m:
+        return None
+    multiplier = _DOCKER_SIZE_UNITS.get(m.group(2).lower())
+    if multiplier is None:
+        return None
+    return int(float(m.group(1)) * multiplier)
+
+
+def _parse_docker_percent(s: str) -> Optional[float]:
+    s = s.strip().rstrip("%")
+    if s in ("--", ""):
+        return None
+    try:
+        return round(float(s), 2)
+    except ValueError:
+        return None
 _update_cache: Dict[str, Any] = {}  # key → {"value": ..., "ts": float}
 
 
@@ -438,6 +470,60 @@ def _get_cpu_temperature() -> Optional[float]:
     return None
 
 
+def _fetch_container_stats(docker_bin: str, names: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Run `docker stats --no-stream` for the given container names.
+
+    Returns {name: {cpu_pct, mem_pct, mem_used_bytes, mem_limit_bytes, net_rx_bytes, net_tx_bytes}}.
+    Result is cached for _DOCKER_STATS_CACHE_TTL seconds to avoid the ~1 s sampling delay
+    on every /system poll.
+    """
+    if not names:
+        return {}
+    cached = _cache_get("docker_stats", ttl=_DOCKER_STATS_CACHE_TTL)
+    if cached is not _MISS:
+        return cached  # type: ignore[return-value]
+    try:
+        result = subprocess.run(
+            [docker_bin, "stats", "--no-stream", "--format", "{{json .}}"] + names,
+            capture_output=True, text=True, timeout=15,
+        )
+    except Exception:
+        return _cache_set("docker_stats", {})
+    stats: Dict[str, Dict[str, Any]] = {}
+    for line in result.stdout.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        name = raw.get("Name", "").lstrip("/")
+        if not name:
+            continue
+        mem_used, mem_limit = None, None
+        mem_str = raw.get("MemUsage", "")
+        if " / " in mem_str:
+            parts = mem_str.split(" / ", 1)
+            mem_used = _parse_docker_size(parts[0])
+            mem_limit = _parse_docker_size(parts[1])
+        net_rx, net_tx = None, None
+        net_str = raw.get("NetIO", "")
+        if " / " in net_str:
+            parts = net_str.split(" / ", 1)
+            net_rx = _parse_docker_size(parts[0])
+            net_tx = _parse_docker_size(parts[1])
+        stats[name] = {
+            "cpu_pct": _parse_docker_percent(raw.get("CPUPerc", "")),
+            "mem_pct": _parse_docker_percent(raw.get("MemPerc", "")),
+            "mem_used_bytes": mem_used,
+            "mem_limit_bytes": mem_limit,
+            "net_rx_bytes": net_rx,
+            "net_tx_bytes": net_tx,
+        }
+    return _cache_set("docker_stats", stats)
+
+
 def _collect_docker_info() -> Dict[str, Any]:
     """Return Docker container status, or an unavailable marker if Docker is absent/down."""
     docker_bin = _find_docker()
@@ -463,6 +549,9 @@ def _collect_docker_info() -> Dict[str, Any]:
             return {"available": False, "error": "permission_denied"}
         return {"available": False, "error": "daemon_not_running"}
 
+    exclude_raw = os.getenv("STATIX_EXCLUDE_CONTAINERS", "")
+    exclude_patterns = [p.strip() for p in exclude_raw.split(",") if p.strip()]
+
     containers: List[Dict[str, Any]] = []
     for line in result.stdout.strip().splitlines():
         line = line.strip()
@@ -472,16 +561,24 @@ def _collect_docker_info() -> Dict[str, Any]:
             raw = json.loads(line)
         except json.JSONDecodeError:
             continue
+        name = raw.get("Names", "").lstrip("/")
+        if exclude_patterns and any(fnmatch.fnmatch(name, p) for p in exclude_patterns):
+            continue
         image_name = raw.get("Image", "")
         containers.append({
             "id": raw.get("ID", ""),
-            "name": raw.get("Names", "").lstrip("/"),
+            "name": name,
             "image": image_name,
             "state": raw.get("State", ""),
             "status": raw.get("Status", ""),
             "ports": raw.get("Ports", ""),
             "update_available": _get_docker_image_update(docker_bin, image_name) if image_name else None,
         })
+
+    running_names = [c["name"] for c in containers if c["state"] == "running"]
+    container_stats = _fetch_container_stats(docker_bin, running_names)
+    for c in containers:
+        c["stats"] = container_stats.get(c["name"])
 
     running = sum(1 for c in containers if c["state"] == "running")
     return {

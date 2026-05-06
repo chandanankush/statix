@@ -87,6 +87,7 @@ All settings are environment variables. The installer writes them into the servi
 | `SYSTEM_STATS_FORWARD_INTERVAL` | `30` | Seconds between polls. |
 | `SYSTEM_STATS_FORWARD_LOG_LEVEL` | `INFO` | Log level for the forwarder. |
 | `SYSTEM_STATS_DISK_PATH` | `/` | Root path for disk usage (override for non-root mounts). |
+| `STATIX_EXCLUDE_CONTAINERS` | *(unset)* | Comma-separated glob patterns for container names to omit from Docker stats (e.g. `watchtower,infra-*`). Matched containers are hidden from the dashboard entirely. |
 
 ---
 
