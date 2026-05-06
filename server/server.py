@@ -164,6 +164,7 @@ def ensure_database() -> None:
         _ensure_column(conn, "metrics", "disk_write", "REAL DEFAULT 0")
         _ensure_column(conn, "metrics", "net_read", "REAL DEFAULT 0")
         _ensure_column(conn, "metrics", "net_write", "REAL DEFAULT 0")
+        _ensure_column(conn, "metrics", "swap_percent", "REAL DEFAULT 0")
         conn.commit()
 
     # Start background retention thread (daemon — exits cleanly with gunicorn).
@@ -253,8 +254,8 @@ def insert_metric(payload: Dict[str, float]) -> None:
     with closing(open_connection()) as conn:
         conn.execute(
             """
-            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["timestamp"],
@@ -266,6 +267,7 @@ def insert_metric(payload: Dict[str, float]) -> None:
                 payload.get("disk_write", 0.0),
                 payload.get("net_read", 0.0),
                 payload.get("net_write", 0.0),
+                payload.get("swap_percent", 0.0),
             ),
         )
         conn.commit()
@@ -351,7 +353,7 @@ def delete_host(hostname: str) -> Dict[str, int]:
 
 
 def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable[sqlite3.Row]:
-    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write FROM metrics"
+    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent FROM metrics"
     params = []
     conditions = []
 
@@ -461,6 +463,7 @@ def receive_metrics():
             "disk_write": float(payload.get("disk_write", 0.0)),
             "net_read": float(payload.get("net_read", 0.0)),
             "net_write": float(payload.get("net_write", 0.0)),
+            "swap_percent": float(payload.get("swap_percent", 0.0)),
         }
     except (TypeError, ValueError):
         logging.warning("Invalid metric payload from %s: bad field types", request.remote_addr)
@@ -502,6 +505,7 @@ def data_endpoint():
             "disk_write": row["disk_write"],
             "net_read": row["net_read"],
             "net_write": row["net_write"],
+            "swap_percent": row["swap_percent"],
         }
         for row in rows
     ]

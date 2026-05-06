@@ -166,6 +166,7 @@ The forwarder POSTs the following to `/metrics` on the monitoring server every i
   "hostname": "chandan-mac-mini.local",
   "cpu": 8.7,
   "ram": 59.5,
+  "swap_percent": 12.4,
   "disk": 20.7,
   "timestamp": 1746092624,
   "disk_read": 0.12,
@@ -173,7 +174,7 @@ The forwarder POSTs the following to `/metrics` on the monitoring server every i
   "details": { }
 }
 ```
-`disk_read` / `disk_write` are MB/s computed between consecutive polls (0.0 on the first poll). `details` contains the full `/system` snapshot used by the dashboard's host cards.
+`disk_read` / `disk_write` are MB/s computed between consecutive polls (0.0 on the first poll). `swap_percent` is sourced from `psutil.swap_memory().percent` (0.0 on systems with no swap configured, e.g. Apple Silicon). `details` contains the full `/system` snapshot used by the dashboard's host cards.
 
 ---
 

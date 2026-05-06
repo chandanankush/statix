@@ -27,6 +27,7 @@ def fetch_system_stats(url: str) -> Dict[str, Any]:
 
 def transform_payload(stats: Dict[str, Any], throughput: Dict[str, float]) -> Dict[str, Any]:
     memory = stats.get("memory", {})
+    swap = stats.get("swap", {})
     disk = stats.get("disk", {})
     cpu = stats.get("cpu", {})
 
@@ -34,6 +35,7 @@ def transform_payload(stats: Dict[str, Any], throughput: Dict[str, float]) -> Di
         "hostname": socket.gethostname(),
         "cpu": float(cpu.get("percent", 0.0)),
         "ram": float(memory.get("percent", 0.0)),
+        "swap_percent": float(swap.get("percent", 0.0)),
         "disk": float(disk.get("percent", 0.0)),
         "timestamp": int(time.time()),
         "disk_read": throughput.get("read_mb_s", 0.0),

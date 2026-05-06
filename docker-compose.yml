@@ -9,6 +9,7 @@ version: "3.9"
 
 services:
   statix:
+    container_name: statix
     image: midnightappcoder/statix:latest
     build:
       context: ./server
