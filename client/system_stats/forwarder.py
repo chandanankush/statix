@@ -27,17 +27,26 @@ def fetch_system_stats(url: str) -> Dict[str, Any]:
 
 def transform_payload(stats: Dict[str, Any], throughput: Dict[str, float]) -> Dict[str, Any]:
     memory = stats.get("memory", {})
+    swap = stats.get("swap", {})
     disk = stats.get("disk", {})
     cpu = stats.get("cpu", {})
+    load_avg = stats.get("load_avg") or {}
 
     return {
         "hostname": socket.gethostname(),
         "cpu": float(cpu.get("percent", 0.0)),
         "ram": float(memory.get("percent", 0.0)),
+        "swap_percent": float(swap.get("percent", 0.0)),
         "disk": float(disk.get("percent", 0.0)),
         "timestamp": int(time.time()),
         "disk_read": throughput.get("read_mb_s", 0.0),
         "disk_write": throughput.get("write_mb_s", 0.0),
+        "net_read": throughput.get("net_recv_mb_s", 0.0),
+        "net_write": throughput.get("net_sent_mb_s", 0.0),
+        "load1": load_avg.get("load1"),
+        "load5": load_avg.get("load5"),
+        "load15": load_avg.get("load15"),
+        "cpu_cores": cpu.get("cores_percent"),
         "details": stats,
     }
 
@@ -67,6 +76,7 @@ def run_forwarder() -> None:
     )
 
     last_disk_io: Dict[str, Any] | None = None
+    last_net_io: Dict[str, Any] | None = None
     last_timestamp: float | None = None
 
     while True:
@@ -74,17 +84,25 @@ def run_forwarder() -> None:
         try:
             stats = fetch_system_stats(system_stats_url)
             disk_io = stats.get("disk_io", {}) or {}
+            net_io = (stats.get("network", {}) or {}).get("io_counters", {}) or {}
             now = time.time()
+
             read_rate = 0.0
             write_rate = 0.0
-            if last_disk_io and last_timestamp:
+            net_recv_rate = 0.0
+            net_sent_rate = 0.0
+            if last_disk_io and last_net_io and last_timestamp:
                 elapsed = max(1e-6, now - last_timestamp)
                 read_rate = max(0.0, (disk_io.get("read_bytes", 0) - last_disk_io.get("read_bytes", 0)) / elapsed)
                 write_rate = max(0.0, (disk_io.get("write_bytes", 0) - last_disk_io.get("write_bytes", 0)) / elapsed)
+                net_recv_rate = max(0.0, (net_io.get("bytes_recv", 0) - last_net_io.get("bytes_recv", 0)) / elapsed)
+                net_sent_rate = max(0.0, (net_io.get("bytes_sent", 0) - last_net_io.get("bytes_sent", 0)) / elapsed)
 
             throughput = {
                 "read_mb_s": read_rate / (1024 * 1024),
                 "write_mb_s": write_rate / (1024 * 1024),
+                "net_recv_mb_s": net_recv_rate / (1024 * 1024),
+                "net_sent_mb_s": net_sent_rate / (1024 * 1024),
             }
 
             stats.setdefault("throughput", {})
@@ -94,6 +112,10 @@ def run_forwarder() -> None:
                     "disk_write_bytes_per_sec": write_rate,
                     "disk_read_mb_per_sec": throughput["read_mb_s"],
                     "disk_write_mb_per_sec": throughput["write_mb_s"],
+                    "net_recv_bytes_per_sec": net_recv_rate,
+                    "net_sent_bytes_per_sec": net_sent_rate,
+                    "net_recv_mb_per_sec": throughput["net_recv_mb_s"],
+                    "net_sent_mb_per_sec": throughput["net_sent_mb_s"],
                 }
             )
 
@@ -104,14 +126,18 @@ def run_forwarder() -> None:
                 except Exception as exc:  # pylint: disable=broad-except
                     logging.warning("Failed to forward to %s: %s", url, exc)
             logging.info(
-                "Forwarded metrics cpu=%.1f%% ram=%.1f%% disk=%.1f%% read=%.2fMB/s write=%.2fMB/s",
+                "Forwarded metrics cpu=%.1f%% ram=%.1f%% disk=%.1f%% "
+                "disk_read=%.2fMB/s disk_write=%.2fMB/s net_recv=%.2fMB/s net_sent=%.2fMB/s",
                 payload["cpu"],
                 payload["ram"],
                 payload["disk"],
                 throughput["read_mb_s"],
                 throughput["write_mb_s"],
+                throughput["net_recv_mb_s"],
+                throughput["net_sent_mb_s"],
             )
             last_disk_io = disk_io
+            last_net_io = net_io
             last_timestamp = now
         except Exception as exc:  # pylint: disable=broad-except
             logging.warning("Forwarding failed: %s", exc)

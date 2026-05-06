@@ -87,6 +87,7 @@ All settings are environment variables. The installer writes them into the servi
 | `SYSTEM_STATS_FORWARD_INTERVAL` | `30` | Seconds between polls. |
 | `SYSTEM_STATS_FORWARD_LOG_LEVEL` | `INFO` | Log level for the forwarder. |
 | `SYSTEM_STATS_DISK_PATH` | `/` | Root path for disk usage (override for non-root mounts). |
+| `STATIX_EXCLUDE_CONTAINERS` | *(unset)* | Comma-separated glob patterns for container names to omit from Docker stats (e.g. `watchtower,infra-*`). Matched containers are hidden from the dashboard entirely. |
 
 ---
 
@@ -166,14 +167,19 @@ The forwarder POSTs the following to `/metrics` on the monitoring server every i
   "hostname": "chandan-mac-mini.local",
   "cpu": 8.7,
   "ram": 59.5,
+  "swap_percent": 12.4,
   "disk": 20.7,
   "timestamp": 1746092624,
   "disk_read": 0.12,
   "disk_write": 0.05,
+  "load1": 1.23,
+  "load5": 0.98,
+  "load15": 0.75,
+  "cpu_cores": [8.5, 12.0, 5.5, 10.2, 6.1, 9.3, 7.8, 11.4, 4.9, 8.0],
   "details": { }
 }
 ```
-`disk_read` / `disk_write` are MB/s computed between consecutive polls (0.0 on the first poll). `details` contains the full `/system` snapshot used by the dashboard's host cards.
+`disk_read` / `disk_write` and `net_read` / `net_write` are in **MB/s** (megabytes per second), computed as byte-counter deltas between consecutive polls (0.0 on the first poll). The dashboard displays network as **Mbps** (×8) to match ISP convention. `swap_percent` is sourced from `psutil.swap_memory().percent` (0.0 on systems with no swap, e.g. Apple Silicon). `load1` / `load5` / `load15` are the 1/5/15-min load averages — `null` on Windows. `cpu_cores` is a list of per-logical-core utilization percentages in core-index order. `details` contains the full `/system` snapshot used by the dashboard's host cards.
 
 ---
 
