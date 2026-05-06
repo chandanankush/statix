@@ -2669,9 +2669,9 @@
         function renderTemperaturesCard(sensors) {
             const card = document.querySelector('[data-widget="temperatures"]');
             const listEl = document.getElementById('sensorList');
-            if (!sensors || !listEl || !card) return;
+            if (!card || !listEl) return;
 
-            const entries = Object.entries(sensors);
+            const entries = sensors ? Object.entries(sensors) : [];
             if (entries.length === 0) {
                 card.style.display = 'none';
                 return;
