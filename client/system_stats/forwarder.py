@@ -46,6 +46,7 @@ def transform_payload(stats: Dict[str, Any], throughput: Dict[str, float]) -> Di
         "load1": load_avg.get("load1"),
         "load5": load_avg.get("load5"),
         "load15": load_avg.get("load15"),
+        "cpu_cores": cpu.get("cores_percent"),
         "details": stats,
     }
 

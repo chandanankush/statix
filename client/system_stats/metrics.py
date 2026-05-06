@@ -531,7 +531,8 @@ def _get_load_average() -> Optional[Dict[str, float]]:
 
 def collect_system_metrics() -> Dict[str, Any]:
     """Gather CPU, memory, disk, network, and uptime data from the host."""
-    cpu_percent = psutil.cpu_percent(interval=0.1)
+    cpu_percents = psutil.cpu_percent(percpu=True, interval=0.1)
+    cpu_percent = round(sum(cpu_percents) / len(cpu_percents), 1) if cpu_percents else 0.0
     logical_cores = psutil.cpu_count(logical=True) or 0
     physical_cores = psutil.cpu_count(logical=False)
     cpu_freq = psutil.cpu_freq()
@@ -566,6 +567,7 @@ def collect_system_metrics() -> Dict[str, Any]:
             "max_frequency_mhz": cpu_freq.max if cpu_freq else None,
             "processor": _get_processor_name(uname),
             "temperature_c": _get_cpu_temperature(),
+            "cores_percent": [round(p, 1) for p in cpu_percents],
         },
         "memory": memory,
         "swap": swap,

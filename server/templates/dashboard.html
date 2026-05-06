@@ -1526,6 +1526,13 @@
             </div>
             <canvas id="cpuChart"></canvas>
         </div>
+        <div class="chart-container" data-widget="chart-cpu-cores">
+            <div class="chart-header">
+                <h2>Per-Core CPU (%)</h2>
+                <span class="drag-handle" title="Drag to reorder">⣿</span>
+            </div>
+            <canvas id="coreChart"></canvas>
+        </div>
         <div class="chart-container" data-widget="chart-load">
             <div class="chart-header">
                 <h2>Load Average</h2>
@@ -1894,6 +1901,62 @@
         });
 
         const cpuChart = new Chart(document.getElementById('cpuChart'), chartConfig('CPU %', '#ff6384', 'rgba(255, 99, 132, 0.2)'));
+
+        // ── Per-core CPU bar chart ───────────────────────────────────────────
+        const coreChart = new Chart(document.getElementById('coreChart'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Core %', data: [], backgroundColor: [] }] },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: currentChartStyles.tooltipBg,
+                        titleColor: currentChartStyles.tooltipText,
+                        bodyColor: currentChartStyles.tooltipText,
+                        borderColor: currentChartStyles.grid,
+                        borderWidth: 1,
+                        callbacks: { label: ctx => ` ${ctx.parsed.x.toFixed(1)}%` },
+                    },
+                },
+                scales: {
+                    x: {
+                        min: 0, max: 100,
+                        ticks: { color: currentChartStyles.text, callback: v => v + '%' },
+                        grid: { color: currentChartStyles.grid },
+                    },
+                    y: {
+                        ticks: { color: currentChartStyles.text },
+                        grid: { color: currentChartStyles.grid },
+                    },
+                },
+            },
+        });
+
+        function _coreColor(pct) {
+            if (pct >= 80) return 'rgba(239,68,68,0.8)';   // red
+            if (pct >= 50) return 'rgba(245,158,11,0.8)';  // amber
+            return 'rgba(6,182,212,0.8)';                   // cyan
+        }
+
+        function updateCoreChart(metrics) {
+            const last = [...metrics].reverse().find(m => Array.isArray(m.cpu_cores));
+            if (!last) {
+                coreChart.data.labels = [];
+                coreChart.data.datasets[0].data = [];
+                coreChart.data.datasets[0].backgroundColor = [];
+                coreChart.update('none');
+                return;
+            }
+            const cores = last.cpu_cores;
+            coreChart.data.labels = cores.map((_, i) => `Core ${i}`);
+            coreChart.data.datasets[0].data = cores;
+            coreChart.data.datasets[0].backgroundColor = cores.map(_coreColor);
+            coreChart.update('none');
+        }
+
         const loadChart = new Chart(document.getElementById('loadChart'), {
             type: 'line',
             data: {
@@ -2051,7 +2114,7 @@
             },
         });
 
-        charts.push(cpuChart, loadChart, ramChart, diskChart);
+        charts.push(cpuChart, coreChart, loadChart, ramChart, diskChart);
 
         // ── Net I/O chart ────────────────────────────────────────────────────
         const netChart = new Chart(document.getElementById('netChart'), {
@@ -3065,6 +3128,7 @@
 
                 if (autoMode && !effectiveHostname) {
                     updateChartData(cpuChart, [], 'cpu');
+                    updateCoreChart([]);
                     updateLoadChart([]);
                     updateMemoryChart([]);
                     updateDiskChart([]);
@@ -3084,6 +3148,7 @@
                 const metrics = payload.data || [];
 
                 updateChartData(cpuChart, metrics, 'cpu');
+                updateCoreChart(metrics);
                 updateLoadChart(metrics);
                 updateMemoryChart(metrics);
                 updateDiskChart(metrics);
@@ -3156,11 +3221,12 @@
             { id: 'docker',   name: '🐳 Docker' },
         ];
         const CHART_WIDGETS = [
-            { id: 'chart-cpu',  name: 'CPU Usage (%)' },
-            { id: 'chart-load', name: 'Load Average' },
-            { id: 'chart-ram',  name: 'Memory (%)' },
-            { id: 'chart-disk', name: 'Disk I/O (MB/s)' },
-            { id: 'chart-net',  name: 'Network I/O (MB/s)' },
+            { id: 'chart-cpu',       name: 'CPU Usage (%)' },
+            { id: 'chart-cpu-cores', name: 'Per-Core CPU (%)' },
+            { id: 'chart-load',      name: 'Load Average' },
+            { id: 'chart-ram',       name: 'Memory (%)' },
+            { id: 'chart-disk',      name: 'Disk I/O (MB/s)' },
+            { id: 'chart-net',       name: 'Network I/O (MB/s)' },
         ];
         const LS_CARD_ORDER   = 'statix_card_order';
         const LS_CARD_HIDDEN  = 'statix_card_hidden';

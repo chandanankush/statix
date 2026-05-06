@@ -1,6 +1,6 @@
 # Statix Product Roadmap
 
-Inspired by a feature gap analysis against [Beszel](https://github.com/henrygd/beszel). Items are ordered by **delivery priority** — low-effort/high-value first, scaling up to larger architectural work. No implementation decisions are made here; this is a product-level list of _what_ to build, not _how_.
+Inspired by a feature gap analysis. Items are ordered by **delivery priority** — low-effort/high-value first, scaling up to larger architectural work. No implementation decisions are made here; this is a product-level list of _what_ to build, not _how_.
 
 ---
 
@@ -41,7 +41,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** Swap pressure is the first sign of memory exhaustion on constrained hosts (Raspberry Pi, low-RAM VMs). Without historical data you cannot tell if a spike is chronic or one-off.
 
-**What Beszel does:** Charts swap alongside RAM as a second line in the memory panel.
+**What competition does:** Charts swap alongside RAM as a second line in the memory panel.
 
 **What was built:**
 - Forwarder: extracts `swap.percent` from the `/system` payload and forwards it as `swap_percent`.
@@ -57,7 +57,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** Load average catches situations where CPU % looks fine but the system is actually saturated with I/O-bound processes queued. It is the canonical first metric checked during an incident.
 
-**What Beszel does:** Collects and charts load average as a companion to CPU %.
+**What competition does:** Collects and charts load average as a companion to CPU %.
 
 **What was built:**
 - Agent: `_get_load_average()` calls `os.getloadavg()` (POSIX-only; returns `None` gracefully on Windows via `AttributeError`). Added as `load_avg` field in the `/system` response.
@@ -67,18 +67,19 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 ---
 
-### P1-3 · Per-Core CPU Breakdown
+### P1-3 · Per-Core CPU Breakdown ✅ Shipped
 
 **Gap:** Only aggregate CPU % is shown. On multi-core hosts (Mac Mini with 10 cores, 4-core Raspberry Pi) there is no way to see which cores are saturated.
 
 **Why it matters:** A single runaway process pins one core but barely moves the aggregate. Per-core view is the first step in diagnosing that class of problem.
 
-**What Beszel does:** Per-core view in a task-manager-style panel alongside the aggregate chart.
+**What competition does:** Per-core view in a task-manager-style panel alongside the aggregate chart.
 
-**Scope of change:**
-- Agent: call `psutil.cpu_percent(percpu=True)` and include the list alongside the existing aggregate.
-- Server: store as a JSON column (list of floats) — no schema migration for existing rows needed.
-- Dashboard: collapsible per-core bar chart or small-multiples panel under the main CPU chart.
+**What was built:**
+- Agent (`metrics.py`): switched to `psutil.cpu_percent(percpu=True, interval=0.1)`, computes aggregate as mean, adds `cpu.cores_percent` list to `/system` response.
+- Forwarder (`forwarder.py`): forwards `cpu_cores` list alongside the existing aggregate.
+- Server (`server.py`): adds `cpu_cores_json TEXT` column via `_ensure_column` (zero-downtime migration), stores as JSON, returns parsed in `/data`.
+- Dashboard: new **Per-Core CPU (%)** horizontal bar chart (`chart-cpu-cores`) — color-coded cyan (<50 %), amber (50–80 %), red (≥80 %). Registered in `CHART_WIDGETS` drag/hide panel. Shows the latest poll's snapshot so it always reflects current core distribution.
 
 ---
 
@@ -88,7 +89,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** One-week views miss weekly traffic patterns and make it hard to distinguish a new recurring problem from a one-time event.
 
-**What Beszel does:** Offers 1 h / 24 h / 7 d / 30 d selectors; queries pre-aggregated data for older ranges.
+**What competition does:** Offers 1 h / 24 h / 7 d / 30 d selectors; queries pre-aggregated data for older ranges.
 
 **Scope of change:**
 - Server: add `"30d"` to `TIMEFRAME_PRESETS` and `TIMEFRAME_LABELS`.
@@ -103,7 +104,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** An overheating NVMe or GPU triggers throttling and silent data corruption long before it causes a crash. Seeing all sensors requires zero new dependencies.
 
-**What Beszel does:** Surfaces all detected temperature sensors; supports allowlist/blocklist patterns.
+**What competition does:** Surfaces all detected temperature sensors; supports allowlist/blocklist patterns.
 
 **Scope of change:**
 - Agent: return the full `sensors_temperatures()` dict instead of only the CPU entry. Each entry is `{sensor_name: [{label, current_c, high_c, critical_c}]}`.
@@ -124,7 +125,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** Disk-full is the most common production incident and is currently silent. A Slack or Telegram message is far more useful than a raw JSON POST that requires another system to relay it.
 
-**What Beszel does:** Alerts on CPU, RAM, disk, temperature, load average, and bandwidth. Delivers to 23+ channels via Shoutrrr URL convention.
+**What competition does:** Alerts on CPU, RAM, disk, temperature, load average, and bandwidth. Delivers to 23+ channels via Shoutrrr URL convention.
 
 **Scope of change:**
 - **New alert metrics:** disk usage %, CPU temperature (°C), load average (1-min), and network bandwidth (bytes/s) — each with its own env-var threshold.
@@ -140,7 +141,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** On a homelab server running 10+ containers the aggregate memory chart tells you nothing about which service is responsible for a spike.
 
-**What Beszel does:** Polls `docker stats` per container and stores time-series data for each; renders a collapsible per-container panel.
+**What competition does:** Polls `docker stats` per container and stores time-series data for each; renders a collapsible per-container panel.
 
 **Scope of change:**
 - Agent: call `docker stats --no-stream --format json` for all running containers; return a list of `{name, cpu_pct, mem_used_bytes, mem_limit_bytes, net_rx_bytes, net_tx_bytes}`.
@@ -156,7 +157,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** S.M.A.R.T. data provides the only warning window between a healthy drive and data loss. On a NAS or server that runs 24/7 this is the highest-value operational metric that is currently missing.
 
-**What Beszel does:** Calls `smartctl` (smartmontools) per physical device; surfaces eMMC wear level and mdraid health as separate indicators.
+**What competition does:** Calls `smartctl` (smartmontools) per physical device; surfaces eMMC wear level and mdraid health as separate indicators.
 
 **Scope of change:**
 - Agent: if `smartctl` is on PATH, call `smartctl -j -a /dev/<device>` for each physical block device; parse JSON output.
@@ -173,7 +174,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** One-size-fits-all thresholds produce either too many false positives on busy machines or too few alerts on quiet ones.
 
-**What Beszel does:** Every system has its own alert configuration stored per-host in the database.
+**What competition does:** Every system has its own alert configuration stored per-host in the database.
 
 **Scope of change:**
 - Server: add a `host_alerts` JSON column to the `host_details` table to store per-host threshold overrides for each alert metric.
@@ -195,7 +196,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** Without user accounts, per-user settings (alert configs, widget order, host ownership) have no place to live. Multi-user is also a prerequisite for OAuth2 login (P3-2) and token-based agent pairing (P3-3).
 
-**What Beszel does:** Supports multiple user accounts with admin and viewer roles; systems are owned by a user and can be shared with others; admins see everything.
+**What competition does:** Supports multiple user accounts with admin and viewer roles; systems are owned by a user and can be shared with others; admins see everything.
 
 **Scope of change:**
 - New `users` table: `id`, `email`, `password_hash` (bcrypt), `role` (admin / viewer), `created_at`.
@@ -212,7 +213,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** A real login flow without a password to manage dramatically lowers the barrier to enabling auth.
 
-**What Beszel does:** Supports GitHub, Google, Discord, Microsoft, and any standard OIDC provider.
+**What competition does:** Supports GitHub, Google, Discord, Microsoft, and any standard OIDC provider.
 
 **Scope of change (requires P3-1 first):**
 - OAuth2 authorization-code flow implemented in Flask using `requests-oauthlib` or similar.
@@ -228,7 +229,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** Once multi-user exists, a shared API key is no longer meaningful. Each host should be owned by a specific user and provisioned with a per-host secret.
 
-**What Beszel does:** Hub displays a pairing token; agent presents it on first connection and is registered automatically; subsequent requests use a per-host secret.
+**What competition does:** Hub displays a pairing token; agent presents it on first connection and is registered automatically; subsequent requests use a per-host secret.
 
 **Scope of change (requires P3-1 first):**
 - Server: `/pairing-tokens` endpoint generates a short-lived token displayed in the dashboard.
@@ -244,7 +245,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** statix is used internationally. A locale foundation that ships English by default lets community contributors add translations without touching application code.
 
-**What Beszel does:** Ships English, French, Polish, Italian, Spanish, and German out of the box.
+**What competition does:** Ships English, French, Polish, Italian, Spanish, and German out of the box.
 
 **Scope of change:**
 - Extract every user-facing string from `dashboard.html` into a JS locale dictionary (e.g., `window.STATIX_LOCALE = {...}`).
@@ -260,7 +261,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** Without downsampling, retention beyond a week is expensive. This is the enabler for long-term trend analysis.
 
-**What Beszel does:** Aggregates raw rows into hourly averages for data older than 24 hours, keeping query time flat regardless of retention window.
+**What competition does:** Aggregates raw rows into hourly averages for data older than 24 hours, keeping query time flat regardless of retention window.
 
 **Scope of change:**
 - Background thread (nightly): replace N per-minute rows older than a configurable threshold with 1 averaged row per hour (or configurable bucket size). Lossy by design.
@@ -275,7 +276,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **Why it matters:** Operational data accumulated over months has real value. A single-command restore path is the difference between a five-minute recovery and starting from scratch.
 
-**What Beszel does:** Automatic scheduled backup to any S3-compatible storage (Backblaze B2, MinIO, AWS S3).
+**What competition does:** Automatic scheduled backup to any S3-compatible storage (Backblaze B2, MinIO, AWS S3).
 
 **Scope of change:**
 - Server reads `STATIX_BACKUP_S3_ENDPOINT`, `STATIX_BACKUP_S3_BUCKET`, `STATIX_BACKUP_S3_KEY_ID`, and `STATIX_BACKUP_S3_SECRET` from env.
@@ -287,7 +288,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 ## Beyond the Priority List — Additional Gaps
 
-The following items also appear in Beszel but were not in the original priority list. They are lower urgency but fully documented so nothing is forgotten.
+The following items also appear in competition but were not in the original priority list. They are lower urgency but fully documented so nothing is forgotten.
 
 ---
 
@@ -297,7 +298,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** An unmonitored battery that degrades silently can mean a surprise outage when mains power drops. The indicator should simply be hidden on hosts where no battery is detected.
 
-**What Beszel does:** Reports battery charge % and AC/charging state alongside system info.
+**What competition does:** Reports battery charge % and AC/charging state alongside system info.
 
 **Scope of change:**
 - Agent: call `psutil.sensors_battery()` and include `charge_pct` and `plugged_in` boolean in the payload.
@@ -311,7 +312,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** On a NAS or media server the data drives are not `/`. Disk-full on a secondary mount causes silent failures in applications, not a clean crash.
 
-**What Beszel does:** Monitors all user-relevant mount points with include/exclude filter support.
+**What competition does:** Monitors all user-relevant mount points with include/exclude filter support.
 
 **Scope of change:**
 - Agent: enumerate all physical / non-virtual mount points via `psutil.disk_partitions(all=False)`.
@@ -328,7 +329,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** A failing or slow HDD dragging down I/O is masked by SSDs in the aggregate. Per-device breakdown is essential for any multi-drive setup.
 
-**What Beszel does:** Tracks per-device I/O rates and attributes them to their respective panels.
+**What competition does:** Tracks per-device I/O rates and attributes them to their respective panels.
 
 **Scope of change:**
 - Agent: call `disk_io_counters(perdisk=True)` and return a dict keyed by device name.
@@ -344,7 +345,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** Without GPU metrics you are flying blind on the most expensive and most contended resource for modern homelab workloads.
 
-**What Beszel does:** Supports NVIDIA (nvml + nvidia-smi), AMD (ROCm / amd_sysfs), Intel, and Apple Silicon via macmon.
+**What competition does:** Supports NVIDIA (nvml + nvidia-smi), AMD (ROCm / amd_sysfs), Intel, and Apple Silicon via macmon.
 
 **Scope of change:**
 - Agent: attempt GPU collection via whichever backend is available on the host — `nvidia-smi --query-gpu`, `rocm-smi`, macOS `macmon`, or Intel sysfs.
@@ -360,7 +361,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** Service liveness is the most actionable operational signal. Knowing `postgresql` has stopped is more useful than seeing CPU drop to 0%.
 
-**What Beszel does:** Tracks a user-configurable list of systemd unit states and surfaces them as status indicators.
+**What competition does:** Tracks a user-configurable list of systemd unit states and surfaces them as status indicators.
 
 **Scope of change:**
 - Agent: reads `STATIX_SERVICES` env var (comma-separated unit names, e.g. `postgresql,nginx,wireguard`).
@@ -377,7 +378,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** Rootless Podman is the preferred runtime on SELinux-enforcing systems and is increasingly common in homelab setups. Zero configuration should be required for it to just work.
 
-**What Beszel does:** Detects the Podman socket interchangeably with Docker; no user configuration needed.
+**What competition does:** Detects the Podman socket interchangeably with Docker; no user configuration needed.
 
 **Scope of change:**
 - Agent: if Docker binary/socket is not found, fall back to the Podman binary (`podman`) or its socket at `/run/user/<uid>/podman/podman.sock`.
@@ -392,7 +393,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** The first thing anyone does when something feels slow is check all machines at once. A status grid is the entry point that makes multi-host monitoring feel like a product rather than a tool.
 
-**What Beszel does:** Hub landing page shows all systems as cards with live CPU %, RAM %, disk %, and online status; clicking drills into the detail view.
+**What competition does:** Hub landing page shows all systems as cards with live CPU %, RAM %, disk %, and online status; clicking drills into the detail view.
 
 **Scope of change:**
 - Dashboard: a new "Overview" page (or the default landing view) showing one card per host.
@@ -408,7 +409,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** Organisation is not a nice-to-have once you have more than a handful of hosts; without it, the dashboard does not scale.
 
-**What Beszel does:** Hosts are grouped implicitly by user ownership; explicit tagging is community-requested.
+**What competition does:** Hosts are grouped implicitly by user ownership; explicit tagging is community-requested.
 
 **Scope of change:**
 - `host_details`: add optional `group` text column (default: empty / ungrouped).
@@ -424,7 +425,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** `brew install` + `brew upgrade` is the gold standard for Mac admins. Homebrew handles versioning, PATH, and service management automatically.
 
-**What Beszel does:** Publishes a Homebrew tap; install and auto-update handled by `brew upgrade`.
+**What competition does:** Publishes a Homebrew tap; install and auto-update handled by `brew upgrade`.
 
 **Scope of change:**
 - Create a `homebrew-statix` tap repository under the GitHub org.
@@ -440,7 +441,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** Windows machines (gaming PCs doubling as homelab nodes, Windows Server VMs) are a common part of mixed homelabs and are currently excluded from statix.
 
-**What Beszel does:** Supports Windows via WinGet/Scoop packages; installs as a Windows service via NSSM.
+**What competition does:** Supports Windows via WinGet/Scoop packages; installs as a Windows service via NSSM.
 
 **Scope of change:**
 - Audit every OS-specific call in `metrics.py` and add `platform.system() == "Windows"` branches or Windows equivalents (`wmi`, `winreg`, PowerShell subprocess).
@@ -457,7 +458,7 @@ The following items also appear in Beszel but were not in the original priority 
 
 **Why it matters:** Many homelab reverse proxy setups host multiple services under a single domain using path prefixes. Statix is unusable in that configuration today.
 
-**What Beszel does:** Supports subpath deployment via a `BASE_PATH` environment variable.
+**What competition does:** Supports subpath deployment via a `BASE_PATH` environment variable.
 
 **Scope of change:**
 - Server: read `STATIX_BASE_PATH` (e.g., `/statix`) and prefix all generated hrefs, API paths, and redirect targets.
@@ -472,7 +473,7 @@ The following items also appear in Beszel but were not in the original priority 
 |---|---|---|---|
 | ✅ P1-1 | Swap usage as time-series chart | Phase 1 — Low effort / High value | Low |
 | ✅ P1-2 | System load average | Phase 1 — Low effort / High value | Low |
-| P1-3 | Per-core CPU breakdown | Phase 1 — Low effort / High value | Low |
+| P1-3 ✅ | Per-core CPU breakdown | Phase 1 — Low effort / High value | Low |
 | P1-4 | 30-day timeframe selector in dashboard | Phase 1 — Low effort / High value | Low |
 | P1-5 | All system temperature sensors | Phase 1 — Low effort / High value | Low |
 | P2-1 | Expanded alerts + multi-channel notifications | Phase 2 — Medium effort / High value | Medium |

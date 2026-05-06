@@ -168,6 +168,7 @@ def ensure_database() -> None:
         _ensure_column(conn, "metrics", "load1",  "REAL")
         _ensure_column(conn, "metrics", "load5",  "REAL")
         _ensure_column(conn, "metrics", "load15", "REAL")
+        _ensure_column(conn, "metrics", "cpu_cores_json", "TEXT")
         conn.commit()
 
     # Start background retention thread (daemon — exits cleanly with gunicorn).
@@ -257,8 +258,8 @@ def insert_metric(payload: Dict[str, float]) -> None:
     with closing(open_connection()) as conn:
         conn.execute(
             """
-            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent, load1, load5, load15)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["timestamp"],
@@ -274,6 +275,7 @@ def insert_metric(payload: Dict[str, float]) -> None:
                 payload.get("load1"),
                 payload.get("load5"),
                 payload.get("load15"),
+                json.dumps(payload["cpu_cores"]) if payload.get("cpu_cores") else None,
             ),
         )
         conn.commit()
@@ -359,7 +361,7 @@ def delete_host(hostname: str) -> Dict[str, int]:
 
 
 def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable[sqlite3.Row]:
-    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent, load1, load5, load15 FROM metrics"
+    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json FROM metrics"
     params = []
     conditions = []
 
@@ -473,6 +475,7 @@ def receive_metrics():
             "load1":  float(payload["load1"])  if payload.get("load1")  is not None else None,
             "load5":  float(payload["load5"])  if payload.get("load5")  is not None else None,
             "load15": float(payload["load15"]) if payload.get("load15") is not None else None,
+            "cpu_cores": payload.get("cpu_cores") if isinstance(payload.get("cpu_cores"), list) else None,
         }
     except (TypeError, ValueError):
         logging.warning("Invalid metric payload from %s: bad field types", request.remote_addr)
@@ -518,6 +521,7 @@ def data_endpoint():
             "load1":  row["load1"],
             "load5":  row["load5"],
             "load15": row["load15"],
+            "cpu_cores": json.loads(row["cpu_cores_json"]) if row["cpu_cores_json"] else None,
         }
         for row in rows
     ]
