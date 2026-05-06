@@ -33,6 +33,7 @@ TIMEFRAME_PRESETS: Dict[str, int] = {
     "6h": 6 * 60 * 60,
     "24h": 24 * 60 * 60,
     "7d": 7 * 24 * 60 * 60,
+    "30d": 30 * 24 * 60 * 60,
 }
 TIMEFRAME_LABELS: Dict[str, str] = {
     "15m": "Last 15 minutes",
@@ -42,6 +43,7 @@ TIMEFRAME_LABELS: Dict[str, str] = {
     "6h": "Last 6 hours",
     "24h": "Last 24 hours",
     "7d": "Last 7 days",
+    "30d": "Last 30 days",
 }
 
 # ── security constants ────────────────────────────────────────────────────────

@@ -83,7 +83,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 ---
 
-### P1-4 · 30-Day Timeframe Selector in Dashboard
+### P1-4 · 30-Day Timeframe Selector in Dashboard ✅ Shipped
 
 **Gap:** The server already stores up to 30 days of data (`STATIX_RETENTION_DAYS` default), but the dashboard only exposes 1 h / 24 h / 7 d selectors. The extra three weeks of data are unreachable.
 
@@ -91,10 +91,10 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **What competition does:** Offers 1 h / 24 h / 7 d / 30 d selectors; queries pre-aggregated data for older ranges.
 
-**Scope of change:**
-- Server: add `"30d"` to `TIMEFRAME_PRESETS` and `TIMEFRAME_LABELS`.
-- Dashboard: add the 30 d button to the time-range picker.
-- Note: 30 days of raw rows (≈86 000 at 30-second polls) will render slowly without downsampling. This is acceptable as a first pass; server-side aggregation is a separate Phase 3 item (P3-5).
+**What was built:**
+- Server (`server.py`): added `"30d": 30 * 24 * 60 * 60` to `TIMEFRAME_PRESETS` and `"30d": "Last 30 days"` to `TIMEFRAME_LABELS`.
+- Dashboard: the timeframe `<select>` is Jinja-templated from `TIMEFRAME_PRESETS`, so the **Last 30 days** option appears automatically — no HTML change needed.
+- Note: at 30-second poll intervals, 30 days ≈ 86 000 raw rows per host. Rendering is acceptable as a first pass; server-side downsampling for long ranges is tracked as P3-5.
 
 ---
 
@@ -474,7 +474,7 @@ The following items also appear in competition but were not in the original prio
 | ✅ P1-1 | Swap usage as time-series chart | Phase 1 — Low effort / High value | Low |
 | ✅ P1-2 | System load average | Phase 1 — Low effort / High value | Low |
 | P1-3 ✅ | Per-core CPU breakdown | Phase 1 — Low effort / High value | Low |
-| P1-4 | 30-day timeframe selector in dashboard | Phase 1 — Low effort / High value | Low |
+| P1-4 ✅ | 30-day timeframe selector in dashboard | Phase 1 — Low effort / High value | Low |
 | P1-5 | All system temperature sensors | Phase 1 — Low effort / High value | Low |
 | P2-1 | Expanded alerts + multi-channel notifications | Phase 2 — Medium effort / High value | Medium |
 | P2-2 | Per-container resource metrics | Phase 2 — Medium effort / High value | Medium |
