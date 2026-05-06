@@ -131,32 +131,34 @@
         .filters {
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
-            align-items: flex-start;
-            gap: 12px 20px;
+            align-items: flex-end;
+            gap: 16px;
             margin: 0 auto 24px;
             width: 100%;
         }
 
         .filter-control {
             display: flex;
-            flex: 1 1 240px;
             flex-direction: column;
             gap: 6px;
-            min-width: 200px;
+            flex: 1 1 min-content;
+            min-width: 140px;
+        }
+
+        .filter-control select {
+            max-width: 100%;
         }
 
         .filter-actions {
             display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            align-self: stretch;
+            align-items: center;
             flex-wrap: wrap;
             gap: 12px;
+            margin-left: auto;
         }
 
         .filter-actions .ghost-button {
-            min-width: 140px;
+            min-width: 130px;
         }
 
         /* ── base: ensure no element causes horizontal overflow ─────── */
@@ -329,7 +331,19 @@
         .cards-grid {
             display: grid;
             gap: 20px;
-            grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        @media (min-width: 1650px) {
+            .cards-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .cards-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
         .card {
@@ -585,14 +599,6 @@
         }
 
         @media (min-width: 769px) {
-            .filters {
-                justify-content: space-between;
-                align-items: flex-end;
-            }
-
-            .filter-actions {
-                align-self: flex-end;
-            }
 
             .status {
                 flex-direction: row;
@@ -634,32 +640,23 @@
             }
 
             .filters {
-                flex-direction: column;
-                align-items: stretch;
+                gap: 16px;
             }
 
-            /* override base min-width/flex with higher specificity */
             .filter-control {
-                flex: 1 1 auto;
+                flex: 1 1 calc(50% - 8px);
                 min-width: 0;
-                width: 100%;
             }
 
             .filter-actions {
                 width: 100%;
-                min-width: 0;
-                flex: unset;
-                flex-direction: column;
-                align-items: stretch;
+                margin-left: 0;
+                justify-content: stretch;
             }
 
-            /* use !important only here to beat .filter-actions .ghost-button specificity */
-            .ghost-button,
             .filter-actions .ghost-button {
-                width: 100%;
-                min-width: 0 !important;
+                flex: 1 1 auto;
                 text-align: center;
-                box-sizing: border-box;
             }
 
             .status {
@@ -694,8 +691,8 @@
         }
 
         .docker-container-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            display: flex;
+            flex-direction: column;
             gap: 8px;
             margin-top: 12px;
             max-height: 460px;
