@@ -128,7 +128,7 @@ docker run -d \
 | Method | Endpoint | Auth required | Description |
 |---|---|---|---|
 | `POST` | `/metrics` | No | Ingest a metrics payload from the forwarder. |
-| `GET` | `/data` | No | Query stored metrics. Params: `hostname`, `timeframe` (`15m`, `30m`, `1h`, `3h`, `6h`, `24h`, `7d`, `30d`). Each point includes `cpu`, `ram`, `swap_percent`, `disk`, `disk_read`, `disk_write`, `net_read`, `net_write`, `load1`, `load5`, `load15` (nullable), `cpu_cores` (list of per-core %, nullable). |
+| `GET` | `/data` | No | Query stored metrics. Params: `hostname`, `timeframe` (`15m`, `30m`, `1h`, `3h`, `6h`, `24h`, `7d`, `30d`). Each point includes `cpu`, `ram`, `swap_percent`, `disk`, `disk_read`, `disk_write`, `net_read`, `net_write` (all in **MB/s** — dashboard displays network as Mbps ×8), `load1`, `load5`, `load15` (nullable), `cpu_cores` (list of per-core %, nullable). |
 | `GET` | `/details` | No | Latest rich snapshot for a host. Param: `hostname`. |
 | `GET` | `/hosts` | No | List all known hosts with last-seen timestamps. |
 | `POST` | `/hosts/<hostname>/clean` | **Yes** | Delete metric history for a host (keeps host_details). |

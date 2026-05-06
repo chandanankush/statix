@@ -179,7 +179,7 @@ The forwarder POSTs the following to `/metrics` on the monitoring server every i
   "details": { }
 }
 ```
-`disk_read` / `disk_write` are MB/s computed between consecutive polls (0.0 on the first poll). `swap_percent` is sourced from `psutil.swap_memory().percent` (0.0 on systems with no swap configured, e.g. Apple Silicon). `load1` / `load5` / `load15` are the 1-min, 5-min, and 15-min load averages from `os.getloadavg()` — `null` on Windows where the call is unavailable. `cpu_cores` is a list of per-logical-core utilization percentages in core-index order (e.g. 10 values on a 10-core host). `details` contains the full `/system` snapshot used by the dashboard's host cards.
+`disk_read` / `disk_write` and `net_read` / `net_write` are in **MB/s** (megabytes per second), computed as byte-counter deltas between consecutive polls (0.0 on the first poll). The dashboard displays network as **Mbps** (×8) to match ISP convention. `swap_percent` is sourced from `psutil.swap_memory().percent` (0.0 on systems with no swap, e.g. Apple Silicon). `load1` / `load5` / `load15` are the 1/5/15-min load averages — `null` on Windows. `cpu_cores` is a list of per-logical-core utilization percentages in core-index order. `details` contains the full `/system` snapshot used by the dashboard's host cards.
 
 ---
 
