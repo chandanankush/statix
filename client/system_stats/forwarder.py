@@ -30,6 +30,7 @@ def transform_payload(stats: Dict[str, Any], throughput: Dict[str, float]) -> Di
     swap = stats.get("swap", {})
     disk = stats.get("disk", {})
     cpu = stats.get("cpu", {})
+    load_avg = stats.get("load_avg") or {}
 
     return {
         "hostname": socket.gethostname(),
@@ -40,6 +41,9 @@ def transform_payload(stats: Dict[str, Any], throughput: Dict[str, float]) -> Di
         "timestamp": int(time.time()),
         "disk_read": throughput.get("read_mb_s", 0.0),
         "disk_write": throughput.get("write_mb_s", 0.0),
+        "load1": load_avg.get("load1"),
+        "load5": load_avg.get("load5"),
+        "load15": load_avg.get("load15"),
         "details": stats,
     }
 

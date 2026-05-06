@@ -171,10 +171,13 @@ The forwarder POSTs the following to `/metrics` on the monitoring server every i
   "timestamp": 1746092624,
   "disk_read": 0.12,
   "disk_write": 0.05,
+  "load1": 1.23,
+  "load5": 0.98,
+  "load15": 0.75,
   "details": { }
 }
 ```
-`disk_read` / `disk_write` are MB/s computed between consecutive polls (0.0 on the first poll). `swap_percent` is sourced from `psutil.swap_memory().percent` (0.0 on systems with no swap configured, e.g. Apple Silicon). `details` contains the full `/system` snapshot used by the dashboard's host cards.
+`disk_read` / `disk_write` are MB/s computed between consecutive polls (0.0 on the first poll). `swap_percent` is sourced from `psutil.swap_memory().percent` (0.0 on systems with no swap configured, e.g. Apple Silicon). `load1` / `load5` / `load15` are the 1-min, 5-min, and 15-min load averages from `os.getloadavg()` — `null` on Windows where the call is unavailable. `details` contains the full `/system` snapshot used by the dashboard's host cards.
 
 ---
 

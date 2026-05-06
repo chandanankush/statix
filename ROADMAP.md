@@ -51,7 +51,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 ---
 
-### P1-2 · System Load Average
+### ✅ P1-2 · System Load Average — **Shipped**
 
 **Gap:** Load average (1-min, 5-min, 15-min) is a standard Unix health signal and is never collected or displayed.
 
@@ -59,10 +59,11 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 **What Beszel does:** Collects and charts load average as a companion to CPU %.
 
-**Scope of change:**
-- Agent: call `os.getloadavg()` (POSIX; return `None` on Windows) and include in the payload.
-- Server: three new nullable columns — `load1`, `load5`, `load15`.
-- Dashboard: sparkline or annotation below the CPU chart; hidden on hosts that return `None`.
+**What was built:**
+- Agent: `_get_load_average()` calls `os.getloadavg()` (POSIX-only; returns `None` gracefully on Windows via `AttributeError`). Added as `load_avg` field in the `/system` response.
+- Forwarder: extracts `load1`, `load5`, `load15` from `load_avg` and includes them in the POST payload (`None` when unavailable).
+- Server: three nullable columns (`load1`, `load5`, `load15 REAL`) added via `_ensure_column`. Stored as `NULL` for agents that don't support it; returned in `/data` response.
+- Dashboard: new "Load Average" chart with three lines — 1m (amber), 5m (orange), 15m (slate) — on a free-scale y-axis. CPU info card gains a "Load Avg" stat row (1m / 5m / 15m) that hides automatically on Windows/unsupported hosts. Chart registered in `CHART_WIDGETS` for the drag/hide toggle panel.
 
 ---
 
@@ -469,8 +470,8 @@ The following items also appear in Beszel but were not in the original priority 
 
 | ID | Feature | Phase | Effort |
 |---|---|---|---|
-| P1-1 | Swap usage as time-series chart | Phase 1 — Low effort / High value | Low |
-| P1-2 | System load average | Phase 1 — Low effort / High value | Low |
+| ✅ P1-1 | Swap usage as time-series chart | Phase 1 — Low effort / High value | Low |
+| ✅ P1-2 | System load average | Phase 1 — Low effort / High value | Low |
 | P1-3 | Per-core CPU breakdown | Phase 1 — Low effort / High value | Low |
 | P1-4 | 30-day timeframe selector in dashboard | Phase 1 — Low effort / High value | Low |
 | P1-5 | All system temperature sensors | Phase 1 — Low effort / High value | Low |

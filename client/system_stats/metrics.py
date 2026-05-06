@@ -520,6 +520,15 @@ def _get_processor_name(uname: Any) -> str:
     return name
 
 
+def _get_load_average() -> Optional[Dict[str, float]]:
+    """Return 1/5/15-minute load averages, or None on platforms that don't support it (Windows)."""
+    try:
+        la = os.getloadavg()
+        return {"load1": round(la[0], 2), "load5": round(la[1], 2), "load15": round(la[2], 2)}
+    except (AttributeError, OSError):
+        return None
+
+
 def collect_system_metrics() -> Dict[str, Any]:
     """Gather CPU, memory, disk, network, and uptime data from the host."""
     cpu_percent = psutil.cpu_percent(interval=0.1)
@@ -582,6 +591,7 @@ def collect_system_metrics() -> Dict[str, Any]:
             "model": model,
             "os_update": _get_os_updates(),
         },
+        "load_avg": _get_load_average(),
         "docker": _collect_docker_info(),
         "statix_client_version": STATIX_CLIENT_VERSION,
     }

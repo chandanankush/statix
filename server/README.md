@@ -128,7 +128,7 @@ docker run -d \
 | Method | Endpoint | Auth required | Description |
 |---|---|---|---|
 | `POST` | `/metrics` | No | Ingest a metrics payload from the forwarder. |
-| `GET` | `/data` | No | Query stored metrics. Params: `hostname`, `timeframe` (`1h`, `24h`, `7d`). Each point includes `cpu`, `ram`, `swap_percent`, `disk`, `disk_read`, `disk_write`, `net_read`, `net_write`. |
+| `GET` | `/data` | No | Query stored metrics. Params: `hostname`, `timeframe` (`1h`, `24h`, `7d`). Each point includes `cpu`, `ram`, `swap_percent`, `disk`, `disk_read`, `disk_write`, `net_read`, `net_write`, `load1`, `load5`, `load15` (nullable). |
 | `GET` | `/details` | No | Latest rich snapshot for a host. Param: `hostname`. |
 | `GET` | `/hosts` | No | List all known hosts with last-seen timestamps. |
 | `POST` | `/hosts/<hostname>/clean` | **Yes** | Delete metric history for a host (keeps host_details). |

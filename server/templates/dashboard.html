@@ -1222,6 +1222,7 @@
                         <div class="stat-row"><span class="stat-label">Cores</span><span class="stat-value" id="cpuCores">—</span></div>
                         <div class="stat-row"><span class="stat-label">Speed</span><span class="stat-value" id="cpuSpeed">—</span></div>
                         <div class="stat-row" id="cpuTempRow"><span class="stat-label">Temperature</span><span class="stat-value" id="cpuTemp">—</span></div>
+                        <div class="stat-row" id="cpuLoadRow"><span class="stat-label">Load Avg</span><span class="stat-value" id="cpuLoad">—</span></div>
                     </div>
                     <div class="progress"><div class="progress-bar cpu" id="cpuUsageBar"></div></div>
                     <div class="stat-foot" id="cpuUsageText">CPU Usage: —</div>
@@ -1524,6 +1525,13 @@
                 <span class="drag-handle" title="Drag to reorder">⣿</span>
             </div>
             <canvas id="cpuChart"></canvas>
+        </div>
+        <div class="chart-container" data-widget="chart-load">
+            <div class="chart-header">
+                <h2>Load Average</h2>
+                <span class="drag-handle" title="Drag to reorder">⣿</span>
+            </div>
+            <canvas id="loadChart"></canvas>
         </div>
         <div class="chart-container" data-widget="chart-ram">
             <div class="chart-header">
@@ -1886,6 +1894,43 @@
         });
 
         const cpuChart = new Chart(document.getElementById('cpuChart'), chartConfig('CPU %', '#ff6384', 'rgba(255, 99, 132, 0.2)'));
+        const loadChart = new Chart(document.getElementById('loadChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: '1m',  data: [], fill: false, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)', tension: 0.25 },
+                    { label: '5m',  data: [], fill: false, borderColor: '#fb923c', backgroundColor: 'rgba(251,146,60,0.15)',  tension: 0.25 },
+                    { label: '15m', data: [], fill: false, borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.15)', tension: 0.25 },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'nearest', intersect: false },
+                plugins: {
+                    legend: { labels: { color: currentChartStyles.text } },
+                    tooltip: {
+                        backgroundColor: currentChartStyles.tooltipBg,
+                        titleColor: currentChartStyles.tooltipText,
+                        bodyColor: currentChartStyles.tooltipText,
+                        borderColor: currentChartStyles.grid,
+                        borderWidth: 1,
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: { autoSkip: true, maxTicksLimit: 10, color: currentChartStyles.text },
+                        grid: { color: currentChartStyles.grid },
+                    },
+                    y: {
+                        min: 0,
+                        ticks: { color: currentChartStyles.text },
+                        grid: { color: currentChartStyles.grid },
+                    },
+                },
+            },
+        });
         const ramChart = new Chart(document.getElementById('ramChart'), {
             type: 'line',
             data: {
@@ -2006,7 +2051,7 @@
             },
         });
 
-        charts.push(cpuChart, ramChart, diskChart);
+        charts.push(cpuChart, loadChart, ramChart, diskChart);
 
         // ── Net I/O chart ────────────────────────────────────────────────────
         const netChart = new Chart(document.getElementById('netChart'), {
@@ -2197,6 +2242,15 @@
                 return 0;
             }
             return Math.max(0, numeric);
+        }
+
+        function updateLoadChart(metrics) {
+            const labels = metrics.map(point => formatTimestamp(point.timestamp));
+            loadChart.data.labels = labels;
+            loadChart.data.datasets[0].data = metrics.map(point => point.load1  ?? null);
+            loadChart.data.datasets[1].data = metrics.map(point => point.load5  ?? null);
+            loadChart.data.datasets[2].data = metrics.map(point => point.load15 ?? null);
+            loadChart.update('none');
         }
 
         function updateMemoryChart(metrics) {
@@ -2549,6 +2603,14 @@
                 if (cpuTempRow) cpuTempRow.style.display = '';
             } else {
                 if (cpuTempRow) cpuTempRow.style.display = 'none';
+            }
+            const cpuLoadRow = document.getElementById('cpuLoadRow');
+            const loadAvg = details.load_avg;
+            if (loadAvg && typeof loadAvg.load1 === 'number') {
+                setDetailField('cpuLoad', `${loadAvg.load1.toFixed(2)} / ${loadAvg.load5.toFixed(2)} / ${loadAvg.load15.toFixed(2)}`);
+                if (cpuLoadRow) cpuLoadRow.style.display = '';
+            } else {
+                if (cpuLoadRow) cpuLoadRow.style.display = 'none';
             }
             const cpuPercent = typeof cpu.percent === 'number' ? cpu.percent : null;
             const cpuUsageText = cpuPercent === null ? 'CPU Usage: —' : `CPU Usage: ${cpuPercent.toFixed(1)}%`;
@@ -3003,6 +3065,7 @@
 
                 if (autoMode && !effectiveHostname) {
                     updateChartData(cpuChart, [], 'cpu');
+                    updateLoadChart([]);
                     updateMemoryChart([]);
                     updateDiskChart([]);
                     updateNetChart([]);
@@ -3021,6 +3084,7 @@
                 const metrics = payload.data || [];
 
                 updateChartData(cpuChart, metrics, 'cpu');
+                updateLoadChart(metrics);
                 updateMemoryChart(metrics);
                 updateDiskChart(metrics);
                 updateNetChart(metrics);
@@ -3093,7 +3157,8 @@
         ];
         const CHART_WIDGETS = [
             { id: 'chart-cpu',  name: 'CPU Usage (%)' },
-            { id: 'chart-ram',  name: 'RAM Usage (%)' },
+            { id: 'chart-load', name: 'Load Average' },
+            { id: 'chart-ram',  name: 'Memory (%)' },
             { id: 'chart-disk', name: 'Disk I/O (MB/s)' },
             { id: 'chart-net',  name: 'Network I/O (MB/s)' },
         ];
