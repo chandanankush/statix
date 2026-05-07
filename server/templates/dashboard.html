@@ -1550,15 +1550,15 @@
                             </div>
                             <div class="threshold-color-wrap">
                             <select class="threshold-color-select" id="thr-uptime-long-color">
-                                <option value="card-alert">● Red</option>
                                 <option value="card-warn">● Amber</option>
+                                <option value="card-alert">● Red</option>
                                 <option value="card-blue">● Blue</option>
                                 <option value="card-green">● Green</option>
                                 <option value="card-purple">● Purple</option>
                                 <option value="custom">🎨 Custom…</option>
                                 <option value="off">Off</option>
                             </select>
-                            <input type="color" class="threshold-color-hex hidden" id="thr-uptime-long-hex" value="#ef4444">
+                            <input type="color" class="threshold-color-hex hidden" id="thr-uptime-long-hex" value="#f97316">
                             </div>
                         </div>
                     </div>
@@ -2680,9 +2680,9 @@
             cpuWarn: 80,    cpuColor: 'card-warn',
             ramWarn: 85,    ramColor: 'card-warn',
             diskWarn: 85,   diskColor: 'card-warn',
-            networkColor: 'card-warn',
+            networkColor: 'card-alert',
             uptimeRebootH: 1,  uptimeRebootColor: 'card-warn',
-            uptimeLongD: 25,   uptimeLongColor: 'card-alert',
+            uptimeLongD: 30,   uptimeLongColor: 'card-warn',
             dockerColor: 'card-warn',
         };
 
