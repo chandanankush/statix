@@ -1354,17 +1354,6 @@
                 </div>
             </article>
 
-            <article class="card" data-widget="temperatures" style="display:none">
-                <div class="card-header">
-                    <div class="card-icon">🌡️</div>
-                    <h3>Temperatures</h3>
-                    <span class="drag-handle" title="Drag to reorder">⣿</span>
-                </div>
-                <div class="card-body">
-                    <div id="sensorList"></div>
-                </div>
-            </article>
-
             <article class="card" data-widget="docker">
                 <div class="card-header">
                     <div class="card-icon">🐳</div>
@@ -2776,63 +2765,6 @@
             }
         }
 
-        function renderTemperaturesCard(sensors) {
-            const card = document.querySelector('[data-widget="temperatures"]');
-            const listEl = document.getElementById('sensorList');
-            if (!card || !listEl) return;
-
-            const entries = sensors ? Object.entries(sensors) : [];
-            if (entries.length === 0) {
-                card.style.display = 'none';
-                return;
-            }
-            card.style.display = '';
-
-            while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
-
-            entries.forEach(([sensorName, readings]) => {
-                const section = document.createElement('div');
-                section.style.cssText = 'margin-bottom:10px';
-
-                const header = document.createElement('div');
-                header.style.cssText = 'font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.55;margin-bottom:4px';
-                header.textContent = sensorName;
-                section.appendChild(header);
-
-                readings.forEach(r => {
-                    const row = document.createElement('div');
-                    row.className = 'stat-row';
-
-                    const label = document.createElement('span');
-                    label.className = 'stat-label';
-                    label.textContent = r.label;
-
-                    const val = document.createElement('span');
-                    val.className = 'stat-value';
-
-                    const temp = r.current_c;
-                    let color = 'var(--color-success, #22c55e)';
-                    if (r.critical_c !== null && temp >= r.critical_c * 0.9) {
-                        color = 'var(--color-danger, #ef4444)';
-                    } else if (r.high_c !== null && temp >= r.high_c * 0.9) {
-                        color = 'var(--color-warn, #f59e0b)';
-                    }
-                    val.style.color = color;
-
-                    let suffix = '';
-                    if (r.high_c !== null) suffix += ` / ${r.high_c}°`;
-                    if (r.critical_c !== null) suffix += ` / ${r.critical_c}°`;
-                    val.textContent = `${temp.toFixed(1)} °C${suffix}`;
-
-                    row.appendChild(label);
-                    row.appendChild(val);
-                    section.appendChild(row);
-                });
-
-                listEl.appendChild(section);
-            });
-        }
-
         function renderHostDetails(details) {
             const cpu = details.cpu || {};
             setDetailField('cpuProcessor', cpu.processor || '—');
@@ -2981,7 +2913,6 @@
             setDetailField('uptimeBoot', bootString);
 
             renderDockerCard(details.docker || null);
-            renderTemperaturesCard(details.sensors || null);
 
             // ── card alert states ──────────────────────────────────────────
             const thr = loadThresholds();
@@ -3398,7 +3329,6 @@
             { id: 'network',  name: '📡 Network Information' },
             { id: 'uptime',   name: '⏱️ System Uptime' },
             { id: 'docker',        name: '🐳 Docker' },
-            { id: 'temperatures',  name: '🌡️ Temperatures' },
         ];
         const CHART_WIDGETS = [
             { id: 'chart-cpu',       name: 'CPU Usage (%)' },
