@@ -609,7 +609,7 @@ def dashboard():
         hostnames=hostnames,
         timeframe_presets=TIMEFRAME_PRESETS,
         timeframe_labels=TIMEFRAME_LABELS,
-        default_timeframe="1h",
+        default_timeframe="15m",
         auth_required=(API_KEY is not None),
         server_version=SERVER_VERSION,
     )
