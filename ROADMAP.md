@@ -468,6 +468,170 @@ The following items also appear in competition but were not in the original prio
 
 ---
 
+### P+-12 · SSH Agent Connection Mode
+
+**Gap:** Agents must expose an inbound HTTP port that the server polls. There is no alternative where the server reaches the agent over an existing SSH connection, which means every monitored host needs a firewall hole or a reverse proxy.
+
+**Why it matters:** Many homelab setups already have SSH access to every machine but do not expose arbitrary ports to the internet. SSH tunnelling eliminates the inbound-port requirement entirely and is the preferred connection model for security-conscious users.
+
+**What competition does:** Supports an SSH connection mode where the hub connects to the agent over SSH instead of HTTP; the agent binary can run with no open port and no explicit firewall rule.
+
+**Scope of change:**
+- Server: optional SSH connection mode per host, configured with `hostname`, `port`, `user`, and an SSH key path.
+- When SSH mode is active, the server opens an SSH tunnel to the agent's local HTTP listener rather than connecting directly.
+- Dashboard: "Add host" form gains an SSH connection option alongside the existing HTTP URL field.
+- Agent: no change needed — the local FastAPI service is tunnelled transparently.
+- Security: SSH keys stored server-side; private key never leaves the server.
+
+---
+
+### P+-13 · ZFS ARC Monitoring
+
+**Gap:** Hosts running ZFS (TrueNAS, FreeBSD, Ubuntu with OpenZFS) have an ARC (Adaptive Replacement Cache) that can consume significant RAM — sometimes tens of gigabytes. This memory does not appear in `psutil`'s standard RAM counters and is completely invisible in statix.
+
+**Why it matters:** On a NAS or storage server the ARC is often the largest single consumer of RAM. Without it, the memory chart dramatically underreports actual usage and makes capacity planning impossible on ZFS hosts.
+
+**What competition does:** Reads `/proc/spl/kstat/zfs/arcstats` on Linux and `sysctl kstat.zfs.misc.arcstats` on FreeBSD; surfaces ARC size as a distinct memory segment alongside RAM and swap.
+
+**Scope of change:**
+- Agent: a new `_get_zfs_arc()` function reads `arcstats` via `/proc` (Linux) or `sysctl` (FreeBSD); returns `None` gracefully when ZFS is not present.
+- Payload: `zfs_arc_bytes` added to the `/system` response.
+- Forwarder: forwards `zfs_arc_bytes` when available.
+- Server: `zfs_arc_bytes` column via `_ensure_column`; returned in `/data`.
+- Dashboard: memory chart gains an optional ZFS ARC line; hidden automatically on hosts where the value is always `null`.
+
+---
+
+### P+-14 · Advanced Disk I/O Metrics (Utilization, Await, Queue Depth)
+
+**Gap:** P+-3 tracks per-device read/write throughput in bytes per second, but does not capture whether the device itself is saturated. Disk utilization % (time the device was busy), average I/O await time (ms), and queue depth are the signals that distinguish a slow device from a fast device that happens to be writing a lot.
+
+**Why it matters:** A disk doing 50 MB/s can be either completely idle (fast SSD, shallow queue) or completely saturated (slow HDD, deep queue, high await). Throughput alone cannot answer "is this disk a bottleneck?" — utilization and await can.
+
+**What competition does:** Tracks disk utilization %, read/write await time, and I/O queue depth per device.
+
+**Scope of change:**
+- Agent: extend `_get_disk_io()` to call `disk_io_counters(perdisk=True)` and compute utilization % from `busy_time` delta, await from `read_time + write_time` divided by `read_count + write_count`, and report `io_queue` from the counter where available.
+- Server: new columns `disk_io_util_json`, `disk_io_await_json` stored as JSON per device; returned in `/data`.
+- Dashboard: disk I/O chart gains a secondary axis for utilization % or a tooltip showing await ms per device.
+- Note: this extends P+-3 (per-device I/O) and ideally ships together with it.
+
+---
+
+### P+-15 · Linux mdraid / Software RAID Health
+
+**Gap:** Hosts using Linux software RAID (`md` devices) have no visibility into array state — a degraded or rebuilding array is completely silent in statix. Physical disk failure in a RAID-1 or RAID-5 array would go unnoticed until the second failure causes data loss.
+
+**Why it matters:** Software RAID is common on headless Linux servers and Raspberry Pi NAS setups. A degraded-array alert is the difference between a five-minute hot-swap and a rebuild from backup.
+
+**What competition does:** Reads `/proc/mdstat` to surface per-array state (`clean`, `degraded`, `recovering`, `resync`), rebuild progress %, and speed.
+
+**Scope of change:**
+- Agent: `_get_mdraid_status()` parses `/proc/mdstat`; returns a list of `{device, state, level, active_devices, total_devices, rebuild_pct}`. Returns `None` on non-Linux hosts or when no `md` devices exist.
+- Payload: `mdraid` array added to `/system` response; forwarded in the `details` blob.
+- Dashboard: a "RAID Arrays" card hidden when `details.mdraid` is null or empty. Each array row shows name, RAID level, state badge (green=clean, amber=recovering, red=degraded), and a rebuild progress bar when active.
+- Alert integration (P2-1): fires when any array transitions to `degraded`.
+
+---
+
+### P+-16 · eMMC / NVMe Flash Health via sysfs
+
+**Gap:** P2-3 (S.M.A.R.T.) covers spinning HDDs and SATA SSDs via `smartctl`, but eMMC storage (used in Raspberry Pi, many ARM SBCs, and some mini-PCs) does not expose a SCSI-compatible S.M.A.R.T. interface. Its wear-level and health data are available via Linux sysfs but are silently ignored.
+
+**Why it matters:** Raspberry Pi roots are on eMMC or SD card. Wear-out of the storage medium is the number-one cause of Pi failure; knowing wear level and pre-EOL status in advance is the only warning available.
+
+**What competition does:** Reads eMMC health via `/sys/bus/mmc/devices/*/` sysfs entries and surfaces wear level, pre-EOL status, and life-time estimates.
+
+**Scope of change:**
+- Agent: `_get_emmc_health()` enumerates `/sys/bus/mmc/devices/*/` and reads `life_time_est_typ_a`, `life_time_est_typ_b`, and `pre_eol_info` attributes where present.
+- Each device reported as `{name, life_est_a_pct, life_est_b_pct, pre_eol}` (`pre_eol`: `0`=normal, `1`=warning, `2`=urgent).
+- Dashboard: shown as additional rows in the S.M.A.R.T. / Disk Health card (P2-3); badge color-coded by pre-EOL status.
+- Returns `None` gracefully on macOS, Windows, and systems with no MMC devices in sysfs.
+
+---
+
+### P+-17 · Container Network I/O as Time-Series
+
+**Gap:** P2-2 shipped per-container CPU and memory metrics as a live snapshot in the `details` blob. Container network I/O (bytes transmitted and received per container) was explicitly deferred and is not stored in the `metrics` table as a time-series.
+
+**Why it matters:** Network I/O is often the leading indicator of a misbehaving container — a runaway data exfiltration, a polling loop, or a malfunctioning sync job all appear here first. A snapshot is not enough; you need the trend.
+
+**What competition does:** Stores per-container network rx/tx bytes as time-series data and renders them as sparklines or per-container charts.
+
+**Scope of change:**
+- Agent: `_fetch_container_stats()` already parses `NetIO` from `docker stats`; expose `net_rx_bytes` and `net_tx_bytes` per container.
+- Forwarder: include per-container network counters in the POST payload.
+- Server: a new `container_metrics` table — `(timestamp, hostname, container_name, cpu_pct, mem_bytes, net_rx_bytes, net_tx_bytes)` — written on each ingest.
+- Dashboard: container cards gain sparkline charts for network I/O alongside the existing CPU and memory bars.
+- `/data` endpoint extended to return `container_metrics` within the timeframe window.
+
+---
+
+### P+-18 · Configurable Metrics Collection Interval
+
+**Gap:** The forwarder polls the local agent every 30 seconds and the interval is hardcoded. There is no way to increase resolution (e.g., 5-second polling for incident investigation) or reduce it (e.g., 5-minute polling to extend SD card life on a Raspberry Pi).
+
+**Why it matters:** A fixed 30-second interval is the wrong tradeoff for both ends of the spectrum. High-resolution monitoring during an active incident requires sub-30-second data. Battery-operated or flash-backed hosts benefit from less frequent writes to extend storage life.
+
+**What competition does:** Makes the collection interval configurable per agent via an environment variable; the hub respects whatever interval the agent reports.
+
+**Scope of change:**
+- Forwarder: reads `STATIX_POLL_INTERVAL` env var (integer seconds, default `30`, minimum `5`).
+- Agent: no change needed — `/system` is polled on demand.
+- Server: no schema change; data is already timestamped, so variable-interval rows are handled correctly by the query layer.
+- `client/README.md`: document `STATIX_POLL_INTERVAL` with guidance on tradeoffs.
+
+---
+
+### P+-19 · Login / Security Event Notifications
+
+**Gap:** There is no notification when someone logs into the statix dashboard or when an API key is used after a long period of inactivity. A successful login from an unexpected IP or an unauthorized probe of the API goes completely unnoticed.
+
+**Why it matters:** For a personally hosted dashboard containing operational data about your home infrastructure, knowing when and from where the dashboard was accessed is a basic security hygiene feature. It also serves as an early indicator of credential compromise.
+
+**What competition does:** Sends a notification on every successful login event.
+
+**Scope of change:**
+- Server: hook into the login flow (or bearer-token validation) and call `_notify()` (from P2-1) with login timestamp, IP address, and user agent.
+- `STATIX_LOGIN_NOTIFY=true/false` env var controls the feature (default `false` to avoid noise for single-user setups).
+- Quiet hours (P2-1) do NOT apply to login notifications — they are security events, not operational alerts.
+- Notification body: `"Dashboard login from <IP> at <timestamp>"`.
+
+---
+
+### P+-20 · FreeBSD / TrueNAS Scale Platform Support
+
+**Gap:** The agent uses Linux-specific paths (`/proc`, `systemctl`, `/sys/class/hwmon`) throughout and has never been tested or documented for FreeBSD. TrueNAS Scale (a popular homelab NAS OS based on Debian/FreeBSD) is a common deployment target but requires FreeBSD-compatible code paths.
+
+**Why it matters:** TrueNAS Scale is arguably the most popular homelab NAS platform. Users who want statix on their NAS either run it in a VM or cannot run it at all today.
+
+**What competition does:** Explicitly supports FreeBSD and TrueNAS Scale; ships `sysctl`-based fallbacks for Linux `/proc` paths, and skips Linux-only features gracefully.
+
+**Scope of change:**
+- Agent: audit every Linux-specific call and add `platform.system() == "FreeBSD"` branches or `sysctl`-based equivalents.
+- `os.getloadavg()` already works on FreeBSD; temperature sensors require `sysctl dev.cpu.*.temperature`.
+- `systemctl` calls (P+-5) replaced with `service <name> status` on FreeBSD.
+- `install.sh`: add a `freebsd` branch using `pkg` and `rc.d` service registration.
+- CI: add a FreeBSD runner (e.g., via `vmactions/freebsd-vm`) to the GitHub Actions matrix.
+
+---
+
+### P+-21 · Systemd Timer Monitoring
+
+**Gap:** P+-5 tracks systemd _service_ unit states (active / inactive / failed). Systemd _timers_ — the cron replacement used by many modern daemons — have separate state: last-trigger time, next-trigger time, and whether the associated service completed successfully. A failed backup timer looks healthy from the service perspective if the service is not currently running.
+
+**Why it matters:** Timers are how homelab users schedule backups, certificate renewals, and cleanup jobs. A missed backup trigger has no visible signal today unless the user manually queries `systemctl list-timers`.
+
+**What competition does:** Monitors systemd timer units with a configurable include pattern; surfaces last/next trigger times and completion status.
+
+**Scope of change:**
+- Agent: extends P+-5 — when `STATIX_SERVICES` contains a `.timer` unit name (or a dedicated `STATIX_TIMERS` env var lists timer names), call `systemctl show <name>.timer --property=ActiveState,LastTriggerUSec,NextElapseUSecRealtime` and parse results.
+- Payload: timer entries include `{name, state, last_trigger_ts, next_trigger_ts}`.
+- Dashboard: the "Services" card (P+-5) gains a "Timers" sub-section with last/next trigger timestamps and a colored state badge.
+- Alert integration: fires if a timer's `last_trigger_ts` is older than a configurable threshold (e.g., `STATIX_TIMER_ALERT_OVERDUE_HOURS`).
+
+---
+
 ## Priority Summary
 
 | ID | Feature | Phase | Effort |
@@ -498,6 +662,16 @@ The following items also appear in competition but were not in the original prio
 | P+-9 | Homebrew formula | Beyond priority list | Medium |
 | P+-10 | Windows agent | Beyond priority list | High |
 | P+-11 | Reverse proxy subpath deployment | Beyond priority list | Low |
+| P+-12 | SSH agent connection mode | Beyond priority list | High |
+| P+-13 | ZFS ARC monitoring | Beyond priority list | Low |
+| P+-14 | Advanced disk I/O metrics (utilization, await, queue depth) | Beyond priority list | Medium |
+| P+-15 | Linux mdraid / software RAID health | Beyond priority list | Low |
+| P+-16 | eMMC / NVMe flash health via sysfs | Beyond priority list | Low |
+| P+-17 | Container network I/O as time-series | Beyond priority list | Medium |
+| P+-18 | Configurable metrics collection interval | Beyond priority list | Low |
+| P+-19 | Login / security event notifications | Beyond priority list | Low |
+| P+-20 | FreeBSD / TrueNAS Scale platform support | Beyond priority list | High |
+| P+-21 | Systemd timer monitoring | Beyond priority list | Low |
 
 **Effort key:** Low = a few hours, single PR. Medium = one to three days, multi-layer change. High = a week or more, requires design discussion before starting.
 
