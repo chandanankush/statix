@@ -3596,8 +3596,9 @@
                 const sv     = data.version || null;
                 const latest = data.latest_version || null;
 
-                // Store latest GitHub SHA globally — used as source of truth for client checks too.
-                // This ensures client and server versions are both compared against the same baseline.
+                // Store the latest published-image SHA globally — used as source of truth for
+                // client checks too, so client and server are compared against the same baseline
+                // (the newest image that actually shipped, not every commit on main).
                 if (latest && latest !== 'dev') {
                     EXPECTED_CLIENT_VERSION = latest;
                 }
@@ -3607,15 +3608,15 @@
                         msg: 'Server: running from source or pre-version image — no update check available.'});
                 } else if (latest && latest !== sv) {
                     _versionStatus.set('server', {level:'warn',
-                        msg: `Server image is outdated (running: ${sv}, latest on main: ${latest}). ` +
+                        msg: `Server image is outdated (running: ${sv}, latest published: ${latest}). ` +
                              `Update: bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)`});
                 } else if (latest && latest === sv) {
                     _versionStatus.set('server', {level:'ok',
                         msg: `Server is up to date (${sv}).`});
                 } else {
-                    // latest_version is null — GitHub was unreachable
+                    // latest_version is null — Docker Hub was unreachable
                     _versionStatus.set('server', {level:'info',
-                        msg: `Server v${sv} — could not reach GitHub to check for a newer image.`});
+                        msg: `Server v${sv} — could not reach Docker Hub to check for a newer image.`});
                 }
                 _refreshVersionBanner();
             } catch(e) { /* ignore network errors */ }

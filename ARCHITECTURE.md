@@ -91,7 +91,7 @@ git push to main
 
 - `version` — the SHA baked into this specific Docker image.
 - `expected_client_version` — the SHA the server considers compatible (same build, same commit).
-- `latest_version` — fetched **live** from GitHub API (`/repos/chandanankush/statix/commits/main`) by a background thread that runs once at startup then every hour. This is what lets the dashboard know when the *running* image is older than the *latest available* image on Docker Hub.
+- `latest_version` — the SHA of the latest **published** image, fetched **live** from the Docker Hub tags API (`/v2/repositories/midnightappcoder/statix/tags/`) by a background thread that runs once at startup then every hour. It resolves the SHA the `latest` tag points to. This lets the dashboard know when the *running* image is older than the *latest available* image. Because CI skips markdown-only pushes, this SHA advances only on image-affecting changes — so docs/roadmap commits don't raise a false "outdated" banner.
 
 #### Client
 ```
@@ -131,7 +131,7 @@ Dashboard page load
 checkServerVersion()  ←  GET /health
        │
        ├─ data.version          =  SHA baked into running container  ("fd1a0b9")
-       ├─ data.latest_version   =  latest SHA on main branch         ("fd1a0b9" or newer)
+       ├─ data.latest_version   =  latest published image SHA        ("fd1a0b9" or newer)
        └─ data.expected_client_version  =  what clients should be on ("fd1a0b9")
               │  (stored in JS variable EXPECTED_CLIENT_VERSION)
               ▼
