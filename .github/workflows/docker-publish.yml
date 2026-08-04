@@ -10,7 +10,7 @@ on:
   workflow_dispatch:   # manual trigger — skips the debounce wait
 
 # Only one run active at a time. A newer push cancels the waiting run,
-# so only the last commit in any 15-minute burst gets built.
+# so only the last commit in any 3-minute burst gets built.
 concurrency:
   group: docker-publish
   cancel-in-progress: true
@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debounce — wait 15 min for additional pushes
+      - name: Debounce — wait 3 min for additional pushes
         if: github.event_name == 'push'
-        run: sleep 900
+        run: sleep 180
 
       - name: Checkout repository
         uses: actions/checkout@v4
