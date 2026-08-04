@@ -3,6 +3,7 @@ import functools
 import json
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -179,12 +180,12 @@ def ensure_database() -> None:
         t.start()
         logging.info("Retention thread started: purging metrics older than %d days", RETENTION_DAYS)
 
-    # Start background thread to poll GitHub for the latest available SHA.
+    # Start background thread to poll Docker Hub for the latest *published* image SHA.
     # Skip when running in dev mode (SERVER_VERSION == "dev") to avoid noise.
     if SERVER_VERSION != "dev":
-        t2 = threading.Thread(target=_github_version_loop, name="github-version", daemon=True)
+        t2 = threading.Thread(target=_version_check_loop, name="version-check", daemon=True)
         t2.start()
-        logging.info("GitHub version check thread started (repo: %s, branch: %s)", _GITHUB_REPO, _GITHUB_BRANCH)
+        logging.info("Version check thread started (image: %s)", _DOCKERHUB_REPO)
 
 
 def _retention_loop() -> None:
@@ -194,41 +195,79 @@ def _retention_loop() -> None:
         _purge_old_metrics()
 
 
-# ── GitHub latest-version check ───────────────────────────────────────────────
-# Polls the GitHub API once per hour to discover whether a newer image has been
-# pushed to Docker Hub.  Exposed via /health so the dashboard can warn users
-# that their server container is stale without requiring any manual version bump.
+# ── Latest published-image version check ──────────────────────────────────────
+# Polls Docker Hub once per hour to discover the SHA of the latest image that has
+# actually been *published*, and exposes it via /health so the dashboard can warn
+# users their container is stale — but only for changes that produced a new image.
+#
+# Why Docker Hub instead of the GitHub HEAD SHA: the CI workflow skips builds for
+# markdown-only pushes (`paths-ignore: ["**.md"]`), so GitHub's HEAD can advance
+# past the newest image with docs/roadmap commits. Comparing against those SHAs
+# raised a false "outdated" banner even when the running image was the newest one
+# available. The published-image SHA only moves when a real build ships, so the
+# banner now fires only on considerable (image-affecting) changes.
+#
+# Each build tags the image with `latest` plus the short git SHA
+# (`type=sha,format=short` in docker-publish.yml), so the SHA that `latest`
+# currently points to is the newest deployable version.
 
-_GITHUB_REPO = "chandanankush/statix"
-_GITHUB_BRANCH = "main"
-_latest_github_sha: Optional[str] = None  # short SHA of latest commit on main
-_latest_github_sha_lock = threading.Lock()
+_DOCKERHUB_REPO = "midnightappcoder/statix"
+_DOCKERHUB_TAGS_URL = f"https://hub.docker.com/v2/repositories/{_DOCKERHUB_REPO}/tags/?page_size=100"
+_SHA_TAG_RE = re.compile(r"^[0-9a-f]{7,40}$")
+_latest_published_sha: Optional[str] = None  # short SHA of the latest published image
+_latest_published_sha_lock = threading.Lock()
 
 
-def _fetch_latest_github_sha() -> Optional[str]:
-    """Return the short SHA of the HEAD commit on the main branch, or None on error."""
-    url = f"https://api.github.com/repos/{_GITHUB_REPO}/commits/{_GITHUB_BRANCH}"
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.sha", "User-Agent": "statix-server"})
+def _fetch_latest_published_sha() -> Optional[str]:
+    """Return the short git SHA of the latest published image, or None on error.
+
+    Resolves which SHA the `latest` tag points to by matching manifest digests,
+    falling back to the most-recently-updated SHA-style tag.
+    """
+    req = urllib.request.Request(_DOCKERHUB_TAGS_URL, headers={"User-Agent": "statix-server"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            sha = resp.read().decode("ascii").strip()
-            return sha[:7] if len(sha) >= 7 else sha or None
+            data = json.loads(resp.read().decode("utf-8"))
     except Exception:
         return None
 
+    results = data.get("results") or []
+    latest_digest: Optional[str] = None
+    sha_tags = []  # list of (name, last_updated, digest)
+    for tag in results:
+        name = tag.get("name") or ""
+        if name == "latest":
+            latest_digest = tag.get("digest")
+        elif _SHA_TAG_RE.match(name):
+            sha_tags.append((name, tag.get("last_updated") or "", tag.get("digest")))
 
-def _github_version_loop() -> None:
-    """Background thread: refresh _latest_github_sha every hour."""
-    global _latest_github_sha
+    if not sha_tags:
+        return None
+
+    # Prefer the SHA tag whose manifest digest matches what `latest` points to —
+    # both are pushed by the same build, so this is the authoritative answer.
+    if latest_digest:
+        for name, _lu, digest in sha_tags:
+            if digest and digest == latest_digest:
+                return name[:7]
+
+    # Fallback: newest SHA tag by last_updated (ISO-8601 sorts chronologically).
+    sha_tags.sort(key=lambda t: t[1], reverse=True)
+    return sha_tags[0][0][:7]
+
+
+def _version_check_loop() -> None:
+    """Background thread: refresh _latest_published_sha every hour."""
+    global _latest_published_sha
     # Fetch immediately on startup so /health has data quickly.
-    sha = _fetch_latest_github_sha()
-    with _latest_github_sha_lock:
-        _latest_github_sha = sha
+    sha = _fetch_latest_published_sha()
+    with _latest_published_sha_lock:
+        _latest_published_sha = sha
     while True:
         time.sleep(3600)
-        sha = _fetch_latest_github_sha()
-        with _latest_github_sha_lock:
-            _latest_github_sha = sha
+        sha = _fetch_latest_published_sha()
+        with _latest_published_sha_lock:
+            _latest_published_sha = sha
 
 
 def _purge_old_metrics() -> None:
@@ -617,8 +656,8 @@ def dashboard():
 
 @app.route("/health", methods=["GET"])
 def health():
-    with _latest_github_sha_lock:
-        latest = _latest_github_sha
+    with _latest_published_sha_lock:
+        latest = _latest_published_sha
     return jsonify({
         "status": "ok",
         "version": SERVER_VERSION,

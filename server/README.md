@@ -134,7 +134,7 @@ docker run -d \
 | `POST` | `/hosts/<hostname>/clean` | **Yes** | Delete metric history for a host (keeps host_details). |
 | `DELETE` | `/hosts/<hostname>` | **Yes** | Remove a host and all its data entirely. |
 | `GET` | `/dashboard` | No | Chart.js dashboard UI. |
-| `GET` | `/health` | No | Health check — returns `{"status": "ok", "version": "<sha>", "expected_client_version": "<sha>", "latest_version": "<sha-or-null>"}`. `latest_version` is the current HEAD SHA on `main` from GitHub (cached 1 h, `null` when unreachable). The dashboard uses it to detect a stale server image. |
+| `GET` | `/health` | No | Health check — returns `{"status": "ok", "version": "<sha>", "expected_client_version": "<sha>", "latest_version": "<sha-or-null>"}`. `latest_version` is the SHA of the latest **published** image on Docker Hub — the SHA the `latest` tag points to (cached 1 h, `null` when unreachable). The dashboard uses it to detect a stale server image. It only advances when a build actually ships, so markdown-only commits don't trigger a false "outdated" warning. |
 
 "Auth required" applies only when `STATIX_API_KEY` is set. Pass the token as:
 ```
@@ -152,8 +152,8 @@ Each build bakes the git commit SHA into the image as environment variables via 
 - `STATIX_EXPECTED_CLIENT_VERSION` — the SHA the dashboard expects the client to be on (same commit, same repo)
 
 The dashboard reads these at startup via `/health` and shows a yellow warning banner if:
-- A connected client is on a different SHA than the server (`expected_client_version` check).
-- The running server image is behind the latest commit on `main` (`latest_version` vs `version` check — the server polls the GitHub API once per hour and caches the result in memory).
+- A connected client is on a different SHA than the latest published image (`expected_client_version` check).
+- The running server image is behind the latest **published** image (`latest_version` vs `version` check — the server polls the Docker Hub tags API once per hour and caches the result in memory). Because CI skips builds for markdown-only pushes (`paths-ignore: ["**.md"]`), the latest published SHA only moves on image-affecting changes, so docs/roadmap commits never raise a false "outdated" warning.
 
 To build locally and pass the SHA:
 ```sh
