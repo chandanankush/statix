@@ -1,82 +1,73 @@
-# Monitoring Stack
+# statix
 
 [![Docker Hub](https://img.shields.io/docker/v/midnightappcoder/statix?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/midnightappcoder/statix)
 [![CI](https://github.com/chandanankush/statix/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/chandanankush/statix/actions/workflows/docker-publish.yml)
 
-A self-hosted system monitoring stack. The agent (FastAPI + psutil) runs natively on each host (macOS, Raspberry Pi). The server (Flask + SQLite) runs in Docker and is published to Docker Hub as `midnightappcoder/statix`.
+Monitor your home lab from one self-hosted dashboard. A Python agent collects host metrics on macOS or Raspberry Pi/Linux; a Flask server stores them in SQLite and displays CPU, memory, disk, network, and Docker details.
 
-![stats](https://github.com/user-attachments/assets/2e0ffe7d-c37e-4acd-9ea9-997891104216)
+[Install the server](#1-start-the-server) · [Install an agent](#2-connect-an-agent) · [Questions and feedback](https://github.com/chandanankush/statix/discussions)
 
-## Features
-- **Live charts** — CPU %, RAM %, Disk I/O, Network I/O with configurable timeframes
-- **Host detail cards** — CPU info & temperature, memory, storage, system info, network, uptime, Docker
-- **OS update check** — shows pending updates on macOS (`softwareupdate`) and Debian/RPi (`apt`), cached 24 h
-- **Docker image update check** — per-container update badge, cached 24 h
-- **All active network interfaces** — shows every up, non-loopback interface with IP, speed, and link type
-- **CPU temperature** — psutil + sysfs fallback on Linux/Raspberry Pi; `osx-cpu-temp` on macOS Intel; hidden on Apple Silicon
-- **Version mismatch warnings** — dashboard shows a yellow banner if the server or any client is running a different git SHA than expected; updated automatically on every deploy
-- **User-configurable alert thresholds** — per-card color (Amber/Red/Blue/Green/Purple/custom hex), percentage input, on/off; persisted in `localStorage`
-- **Drag-to-reorder & hide** cards and charts; order persisted in `localStorage`
-- **Multi-host** — auto-cycles hosts or pin to a specific machine
-- **Dark/light theme** toggle
-- **Multi-arch Docker image** — `linux/amd64` + `linux/arm64` (Raspberry Pi)
+![Actual statix dashboard running locally with invented host data](docs/assets/dashboard-demo.png)
 
-## Quick Usage
+*Actual interface, captured from an isolated local server. All host identities and metrics are mock data; this is not a production deployment or performance benchmark.* [Short theme walkthrough](docs/assets/dashboard-demo.gif) (two screenshots, condensed timing).
 
-### 1. Start the monitoring server
-Requires Docker. Pulls the pre-built image from Docker Hub:
-```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)
-```
-Or manually with Docker:
+## What you can do
+
+- Compare CPU, per-core load, memory, disk I/O, and network charts across hosts and timeframes.
+- Inspect host details, uptime, active interfaces, and Docker containers when available.
+- Switch themes and customize card order, visibility, and visual alert thresholds.
+- Configure retention and optional CPU/RAM webhook alerts on the server.
+
+See [dashboard details](docs/dashboard-features.md) for platform-dependent metrics and display options.
+
+## Quick start
+
+Requirements: Docker for the server; Python 3.9+ for agents. The installers target macOS and Debian-based Linux/Raspberry Pi OS. Other environments need their own validation. Review downloaded installer scripts before running them: they create persistent services.
+
+### 1. Start the server
+
+For a local trial, bind the dashboard to your Mac or server's loopback interface:
+
 ```sh
 docker run -d \
   --name statix \
   --restart unless-stopped \
-  -p 5050:5000 \
+  -p 127.0.0.1:5050:5000 \
   -v statix_data:/app/data \
   midnightappcoder/statix:latest
 ```
-Or with Docker Compose:
-```sh
-docker compose up -d
-```
-Visit `http://localhost:5050/dashboard`.
 
-### 2. Install the agent on each host (macOS or Raspberry Pi)
-```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)
-```
-Pass flags to skip interactive prompts:
-```sh
-curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh \
-  | bash -s -- --server-url http://YOUR_SERVER:5050 --interval 30
-```
-Re-running the same command upgrades the package and restarts services without losing your config.
+Open <http://localhost:5050/dashboard>. To receive metrics from other machines, configure an appropriate network binding and access controls first; see [server setup](server/README.md). This local-trial command accepts agents on the same machine only.
 
-To uninstall:
+For the interactive installer, download and review [server/install.sh](server/install.sh), then run it. [Docker Compose](docker-compose.yml) is also available after cloning this repository.
+
+### 2. Connect an agent
+
+Download and review [client/install.sh](client/install.sh), then run:
+
 ```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/uninstall.sh)
+bash client/install.sh --server-url http://127.0.0.1:5050 --interval 30
 ```
 
-### 3. View metrics
-Open `http://YOUR_SERVER:5050/dashboard` and filter by hostname and timeframe.
+Run this from a cloned repository on the agent host. For a remote agent, replace the URL with your reachable monitoring server. The installer registers a stats service and forwarder; running it again upgrades the installation while retaining configuration.
 
-#### Optional: CPU temperature on macOS Intel
-```sh
-brew install osx-cpu-temp
-```
-Temperature is shown automatically once the tool is on PATH. Not available on Apple Silicon.
+See the [agent guide](client/README.md) for service management, environment variables, metric payloads, and [uninstallation](client/README.md#uninstall).
 
-## Components
-- **client/** — FastAPI stats service, forwarder, and one-line installer/uninstaller. See `client/README.md`.
-- **server/** — Flask ingestion API, SQLite storage, and Chart.js dashboard. Published as `midnightappcoder/statix` on Docker Hub. See `server/README.md`.
-- **ARCHITECTURE.md** — High-level design and data flow.
-- **docker-compose.yml** — Container orchestration for the monitoring server.
+### 3. Explore metrics
 
-## Getting Help
-- `client/README.md` — installation, configuration, service management, and API reference for the agent.
-- `server/README.md` — server configuration, Docker usage, API endpoints, and Docker Hub CI setup.
-- `ARCHITECTURE.md` — high-level design and data flow.
-- `CONTRIBUTING.md` — how to set up a dev environment and make changes.
-- `AGENTS.md` — rules and conventions for AI coding agents working in this repo.
+Choose a hostname and timeframe in the dashboard. Switch to dark mode or customize cards to focus on the information you need. The [server guide](server/README.md) covers the API, data retention, and optional webhook configuration.
+
+## Limitations and security
+
+- This is a self-hosted project; installation, backups, and access control are your responsibility. The repository has no automated test suite; container builds do not prove end-to-end compatibility.
+- Dashboard and read APIs are unauthenticated. `STATIX_API_KEY` protects settings writes and host clean/delete operations; **metric ingestion (`POST /metrics`) remains unauthenticated**. Keep the stack on a trusted network or behind separate access controls.
+- CPU temperature is platform-dependent and unavailable on Apple Silicon. OS/Docker update checks depend on installed tools and external services.
+- Some dashboard preferences are browser-local. Use a persistent server volume to retain metric history across container replacement.
+
+## Support and contribution
+
+Ask setup questions in [Discussions](https://github.com/chandanankush/statix/discussions), or [report a reproducible issue](https://github.com/chandanankush/statix/issues/new/choose) with sanitized data. Start with the [welcome discussion](https://github.com/chandanankush/statix/discussions/10).
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a focused PR. Browse [good first issues](https://github.com/chandanankush/statix/labels/good%20first%20issue) and [testing requests](https://github.com/chandanankush/statix/labels/help%20wanted).
+
+Technical references: [architecture](ARCHITECTURE.md), [client](client/README.md), [server](server/README.md), and [deployment](DEPLOYMENT.md). No license file is currently supplied; this documentation does not grant additional reuse rights.
