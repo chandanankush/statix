@@ -12,4 +12,3 @@
 - **Multi-host** — auto-cycles hosts or pin to a specific machine
 - **Dark/light theme** toggle
 - **Multi-arch Docker image** — `linux/amd64` + `linux/arm64` (Raspberry Pi)
-

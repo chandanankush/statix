@@ -20,4 +20,3 @@ Earlier roadmap table (difficulty labels are historical):
 | Alertmanager integration | Hard | Pub/sub or webhook from the server on threshold breach |
 
 ---
-
