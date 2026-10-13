@@ -179,27 +179,12 @@ Before opening a PR, confirm every item:
 
 ---
 
-## Project roadmap ideas
+## Finding a first contribution
 
-The following improvements are not yet implemented and would make good first contributions:
-
-| Idea | Difficulty | Notes |
-|---|---|---|
-| Alert threshold notifications | Medium | Trigger webhook when CPU/RAM exceeds a threshold |
-| GPU temperature metric | Easy | `psutil` has limited GPU support; may need `pynvml` for NVIDIA |
-| Per-process CPU/memory breakdown | Medium | Already available in psutil, needs schema changes |
-| Authentication on the dashboard UI | Medium | Currently only protects the delete/clean endpoints |
-| Prometheus `/metrics` endpoint | Medium | Add an exporter alongside `/data` |
-| Time-zone aware timestamps | Easy | Store UTC, convert in dashboard |
-| Dark mode toggle | Easy | CSS variable swap in `dashboard.html` — **implemented** |
-| Docker container monitoring | Easy | Subprocess-based collection via `docker ps --all`; graceful no-op when Docker is absent — **implemented** |
-| PostgreSQL backend | Hard | Abstraction layer in `server.py`, Docker Compose update |
-| Alertmanager integration | Hard | Pub/sub or webhook from the server on threshold breach |
-
----
+Check the [good first issues](https://github.com/chandanankush/statix/labels/good%20first%20issue) for bounded tasks and [help wanted](https://github.com/chandanankush/statix/labels/help%20wanted) for compatibility reports. The [historical ideas](docs/contribution-ideas.md) are retained as planning context. Comment before starting. Platform testing needs disposable environments; never test installers or destructive APIs against production hosts.
 
 ## Getting help
 
-- Open an issue on GitHub with a description of the bug or feature.
+- Ask setup questions in [Discussions](https://github.com/chandanankush/statix/discussions); open an issue for a reproducible bug or scoped feature.
 - For security issues, do not open a public issue — contact the maintainer directly.
 - Read `AGENTS.md` for the canonical list of codebase rules before asking an AI assistant for help.
