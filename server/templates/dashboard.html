@@ -948,6 +948,7 @@
         .drag-handle:hover { opacity: 1; }
         .card.dragging, .chart-container.dragging { opacity: 0.35; }
         .card.drag-over   { outline: 2px dashed var(--color-card-emphasis); outline-offset: 2px; }
+        .chart-container.chart-unavailable { display: none !important; }
         .chart-container.drag-over { outline: 2px dashed var(--color-card-emphasis); outline-offset: 2px; }
         .chart-header {
             display: flex;
@@ -1625,6 +1626,13 @@
             </div>
             <canvas id="coreChart"></canvas>
         </div>
+        <div class="chart-container" data-widget="chart-temp">
+            <div class="chart-header">
+                <h2>CPU Temperature (°C)</h2>
+                <span class="drag-handle" title="Drag to reorder">⣿</span>
+            </div>
+            <canvas id="tempChart"></canvas>
+        </div>
         <div class="chart-container" data-widget="chart-load">
             <div class="chart-header">
                 <h2>Load Average</h2>
@@ -2002,6 +2010,8 @@
         });
 
         const cpuChart = new Chart(document.getElementById('cpuChart'), chartConfig('CPU %', '#ff6384', 'rgba(255, 99, 132, 0.2)'));
+        const tempChart = new Chart(document.getElementById('tempChart'), chartConfig('CPU Temp (°C)', '#f97316', 'rgba(249, 115, 22, 0.2)'));
+        tempChart.options.scales.y.ticks.callback = (value) => `${value}°C`;
 
         // ── Per-core CPU history: one line per core ──────────────────────────
         // Datasets are created per core on first data (see updateCoreChart).
@@ -2229,7 +2239,7 @@
             },
         });
 
-        charts.push(cpuChart, coreChart, loadChart, ramChart, diskChart);
+        charts.push(cpuChart, tempChart, coreChart, loadChart, ramChart, diskChart);
 
         // ── Net I/O chart ────────────────────────────────────────────────────
         const netChart = new Chart(document.getElementById('netChart'), {
@@ -2287,7 +2297,7 @@
 
         // ── Time axis, peak series and stable Y scales ───────────────────────
         // Points are {x: epoch ms, y}. The server downsamples long ranges, so no per-point styling is needed.
-        [cpuChart, coreChart, loadChart, ramChart, diskChart, netChart].forEach((chart) => {
+        [cpuChart, tempChart, coreChart, loadChart, ramChart, diskChart, netChart].forEach((chart) => {
             Object.assign(chart.options.scales.x.ticks, { source: 'auto', autoSkip: true, maxTicksLimit: 8, maxRotation: 0 });
             chart.options.interaction = { mode: 'index', intersect: false };
             chart.options.plugins.legend.labels.filter = (item) => !item.text.endsWith(' peak');
@@ -2438,6 +2448,7 @@
         const toMbps = (value) => toNonNegativeNumber(value) * 8;
         const CHART_SERIES = {
             cpu:  { chart: cpuChart,  series: [{ field: 'cpu', peak: 'cpu_max' }] },
+            temp: { chart: tempChart, yFloor: 100, series: [{ field: 'temperature', peak: 'temperature_max' }] },
             load: { chart: loadChart, yFloor: 1, series: [{ field: 'load1' }, { field: 'load5' }, { field: 'load15' }] },
             mem:  { chart: ramChart,  series: [
                 { field: 'ram', peak: 'ram_max', map: toNonNegativeNumber },
@@ -2540,6 +2551,13 @@
         }
 
         function updateChartData(chart, metrics, field) { renderSeries('cpu', metrics); }
+        // Hosts without a readable sensor (e.g. Apple Silicon) have no temperature series:
+        // hide the card instead of showing an empty chart.
+        function updateTempChart(metrics) {
+            renderSeries('temp', metrics);
+            const hasData = metrics.some((m) => m.temperature != null);
+            tempChart.canvas.closest('.chart-container').classList.toggle('chart-unavailable', !hasData);
+        }
         function updateLoadChart(metrics) { renderSeries('load', metrics); }
         function updateMemoryChart(metrics) { renderSeries('mem', metrics); }
         function updateDiskChart(metrics) { renderSeries('disk', metrics); }
@@ -3408,6 +3426,7 @@
                     lastBucketSeconds = 0;
                     updateChartData(cpuChart, [], 'cpu');
                     updateCoreChart([]);
+                    updateTempChart([]);
                     updateLoadChart([]);
                     updateMemoryChart([]);
                     updateDiskChart([]);
@@ -3430,6 +3449,7 @@
 
                 updateChartData(cpuChart, metrics, 'cpu');
                 updateCoreChart(metrics);
+                updateTempChart(metrics);
                 updateLoadChart(metrics);
                 updateMemoryChart(metrics);
                 updateDiskChart(metrics);
@@ -3506,6 +3526,7 @@
         const CHART_WIDGETS = [
             { id: 'chart-cpu',       name: 'CPU Usage (%)' },
             { id: 'chart-cpu-cores', name: 'Per-Core CPU (%)' },
+            { id: 'chart-temp',      name: 'CPU Temperature (°C)' },
             { id: 'chart-load',      name: 'Load Average' },
             { id: 'chart-ram',       name: 'Memory (%)' },
             { id: 'chart-disk',      name: 'Disk I/O (MB/s)' },
