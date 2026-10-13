@@ -140,7 +140,7 @@ statix/
 | `SYSTEM_STATS_HOST` | `0.0.0.0` | FastAPI bind address |
 | `SYSTEM_STATS_PORT` | `5001` | FastAPI port |
 | `SYSTEM_STATS_LOG_LEVEL` | `info` | uvicorn log level |
-| `MONITORING_SERVER_METRICS_URL` | `http://192.168.0.209:5050/metrics` | Forwarder destination(s). Accepts a single URL or a comma-separated list for multi-server forwarding. Each destination fails independently. |
+| `MONITORING_SERVER_METRICS_URL` | `http://127.0.0.1:5050/metrics` | Forwarder destination(s). Accepts a single URL or a comma-separated list for multi-server forwarding. Each destination fails independently. |
 | `SYSTEM_STATS_FORWARD_INTERVAL` | `30` | Poll interval (seconds) |
 | `SYSTEM_STATS_DISK_PATH` | `/` | Disk mount to report |
 
@@ -192,9 +192,9 @@ curl "http://localhost:5050/data?hostname=test-host&timeframe=1h"
 1. Collect it in `client/system_stats/metrics.py` (add to `get_system_info()` return dict).
 2. Expose it in `client/system_stats/api.py` if needed (it auto-includes via `details`).
 3. If it belongs in the top-level metrics payload, add it to the forwarder's POST in `forwarder.py`.
-4. Add a DB column in `server/server.py` → `_init_db()` `CREATE TABLE` statement.
-5. Populate it in `_store_metrics()` and expose it via `GET /data`.
-6. Update `dashboard.html` to visualise it.
+4. Add a DB column in `server/server.py` → `ensure_database()` with `_ensure_column(...)` so existing databases migrate in place.
+5. Populate it in `insert_metric()` (and validate/convert it in the `POST /metrics` handler), then expose it via `GET /data`: add it to **both** SELECTs in `query_metrics()` — the raw-row query and the downsampled aggregate query (`AVG(...)`, plus `MAX(...)` and an entry in `_AGG_FIELDS` if the peak matters) — and to the point dict in `data_endpoint()`.
+6. Update `dashboard.html`: add a chart card (`data-widget`, `CHART_WIDGETS` entry) and a `CHART_SERIES` entry so it shares the time axis, peak line and stable Y scale.
 
 ---
 

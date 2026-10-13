@@ -11,13 +11,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/cl
 ```
 
 The installer will prompt for:
-- **Monitoring server URL** — defaults to `http://192.168.0.209:5050`
+- **Monitoring server URL** — defaults to `http://127.0.0.1:5050` (use your server's reachable address, e.g. `http://<server-ip>:5050`, when the server runs on another machine)
 - **Forwarding interval** — defaults to `30` seconds
 
 Pass flags to skip prompts:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh \
-  | bash -s -- --server-url http://192.168.0.209:5050 --interval 30
+  | bash -s -- --server-url http://<server-ip>:5050 --interval 30
 ```
 
 ### What the installer does
@@ -83,7 +83,7 @@ All settings are environment variables. The installer writes them into the servi
 | `SYSTEM_STATS_PORT` | `5001` | Port for the FastAPI service. |
 | `SYSTEM_STATS_LOG_LEVEL` | `info` | Log level for the FastAPI service. |
 | `SYSTEM_STATS_URL` | `http://127.0.0.1:5001/system` | Forwarder source endpoint. |
-| `MONITORING_SERVER_METRICS_URL` | `http://192.168.0.209:5050/metrics` | Forwarder destination(s). Accepts a single URL or a comma-separated list (e.g. `http://192.168.0.209:5050/metrics,http://127.0.0.1:5050/metrics`). Each destination is tried independently; one unreachable server does not block the others. |
+| `MONITORING_SERVER_METRICS_URL` | `http://127.0.0.1:5050/metrics` | Forwarder destination(s). Accepts a single URL or a comma-separated list (e.g. `http://<server-a>:5050/metrics,http://<server-b>:5050/metrics`). Each destination is tried independently; one unreachable server does not block the others. |
 | `SYSTEM_STATS_FORWARD_INTERVAL` | `30` | Seconds between polls. |
 | `SYSTEM_STATS_FORWARD_LOG_LEVEL` | `INFO` | Log level for the forwarder. |
 | `SYSTEM_STATS_DISK_PATH` | `/` | Root path for disk usage (override for non-root mounts). |
@@ -111,15 +111,15 @@ Returns a full snapshot of the host. Example response:
   "disk":   { "percent": 20.7, "mount": "/", "total": 494384795648 },
   "disk_io": { "read_bytes": 176723312640, "write_bytes": 80530432000 },
   "network": {
-    "primary_interface": { "name": "en0", "ipv4": "192.168.0.82", "speed_mbps": 1000, "link_type": "Ethernet" },
+    "primary_interface": { "name": "en0", "ipv4": "192.168.1.50", "speed_mbps": 1000, "link_type": "Ethernet" },
     "interfaces": [
-      { "name": "en0", "ipv4": "192.168.0.82", "speed_mbps": 1000, "link_type": "Ethernet" },
+      { "name": "en0", "ipv4": "192.168.1.50", "speed_mbps": 1000, "link_type": "Ethernet" },
       { "name": "en1", "ipv4": "10.0.0.5",     "speed_mbps": 600,  "link_type": "WiFi" }
     ]
   },
-  "uptime": { "seconds": 37422, "human": "10h 23m", "boot_time": "2026-05-01T00:59:22+05:30" },
+  "uptime": { "seconds": 37422, "human": "10h 23m", "boot_time": "2026-05-01T00:59:22+00:00" },
   "system": {
-    "hostname": "chandan-mac-mini.local",
+    "hostname": "my-mac-mini.local",
     "os": "Darwin",
     "model": "Mac16,11",
     "os_update": { "available": true, "count": 3, "source": "softwareupdate" }
@@ -174,7 +174,7 @@ Returns a full snapshot of the host. Example response:
 The forwarder POSTs the following to `/metrics` on the monitoring server every interval:
 ```json
 {
-  "hostname": "chandan-mac-mini.local",
+  "hostname": "my-mac-mini.local",
   "cpu": 8.7,
   "ram": 59.5,
   "swap_percent": 12.4,

@@ -13,8 +13,8 @@ Monitor your home lab from one self-hosted dashboard. A Python agent collects ho
 
 ## What you can do
 
-- Compare CPU, per-core load, memory, disk I/O, and network charts across hosts and timeframes.
-- Inspect host details, uptime, active interfaces, and Docker containers when available.
+- Chart CPU, per-core load, CPU temperature, memory, disk I/O, and network history across hosts, from 15 minutes to 30 days.
+- Inspect host details, uptime, active interfaces, and a per-container Docker table (CPU, memory, network, ports) when available.
 - Switch themes and customize card order, visibility, and visual alert thresholds.
 - Configure retention and optional CPU/RAM webhook alerts on the server.
 
@@ -61,7 +61,8 @@ Choose a hostname and timeframe in the dashboard. Switch to dark mode or customi
 
 - This is a self-hosted project; installation, backups, and access control are your responsibility. The repository has no automated test suite; container builds do not prove end-to-end compatibility.
 - Dashboard and read APIs are unauthenticated. `STATIX_API_KEY` protects settings writes and host clean/delete operations; **metric ingestion (`POST /metrics`) remains unauthenticated**. Keep the stack on a trusted network or behind separate access controls.
-- CPU temperature is platform-dependent and unavailable on Apple Silicon. OS/Docker update checks depend on installed tools and external services.
+- CPU temperature is platform-dependent and unavailable on Apple Silicon. OS/Docker update checks depend on installed tools and external services. On hosts whose kernel disables the memory cgroup (the Raspberry Pi OS default), Docker reports no per-container memory and statix shows an estimate (see the [agent guide](client/README.md)).
+- The dashboard loads Chart.js from the jsDelivr CDN, so the browser needs internet access.
 - Some dashboard preferences are browser-local. Use a persistent server volume to retain metric history across container replacement.
 
 ## Support and contribution

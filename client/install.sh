@@ -185,7 +185,7 @@ fi
 # ── prompt for configuration ──────────────────────────────────────────────────
 header "Configuration"
 
-_default_url="${SERVER_URL:-http://192.168.0.209:5050}"
+_default_url="${SERVER_URL:-http://127.0.0.1:5050}"
 _default_int="${INTERVAL:-30}"
 
 # Always ask for the server URL so upgrades can easily change it.
