@@ -426,8 +426,12 @@ def query_metrics(
     hostname: Optional[str],
     timeframe: Optional[str],
     max_points: int = 0,
-) -> Tuple[Iterable[sqlite3.Row], int]:
-    """Return (rows, bucket_seconds). bucket_seconds == 0 means raw, unaggregated rows."""
+) -> Tuple[Iterable[sqlite3.Row], int, Dict[Tuple[str, int], List[Optional[float]]]]:
+    """Return (rows, bucket_seconds, cores).
+
+    bucket_seconds == 0 means raw rows. Otherwise rows are bucket aggregates and `cores`
+    maps (hostname, bucket id) -> per-core average CPU %; the bucket id is the row's `bkt`.
+    """
     params: List[Any] = []
     conditions = []
     bucket = 0
@@ -439,7 +443,7 @@ def query_metrics(
     if timeframe:
         window = TIMEFRAME_PRESETS.get(timeframe)
         if window is None:
-            return [], 0
+            return [], 0, {}
         cutoff = int(time.time()) - window
         conditions.append("timestamp >= ?")
         params.append(cutoff)
@@ -447,7 +451,11 @@ def query_metrics(
 
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
 
+    cores: Dict[Tuple[str, int], List[Optional[float]]] = {}
+
     if bucket:
+        # `bucket` comes from BUCKET_STEPS (never user input), so it is safe to inline.
+        bucket_expr = "CAST(timestamp AS INTEGER) / %d" % bucket
         # Buckets are aligned to the epoch so earlier buckets stay stable as new data
         # arrives. timestamp is MAX() so the newest bucket carries the true last-seen time.
         sql = (
@@ -461,11 +469,10 @@ def query_metrics(
             "AVG(net_write) AS net_write, MAX(net_write) AS net_write_max, "
             "AVG(swap_percent) AS swap_percent, MAX(swap_percent) AS swap_percent_max, "
             "AVG(load1) AS load1, AVG(load5) AS load5, AVG(load15) AS load15, "
-            "NULL AS cpu_cores_json "
+            "NULL AS cpu_cores_json, " + bucket_expr + " AS bkt "
             "FROM metrics" + where +
-            " GROUP BY hostname, CAST(timestamp AS INTEGER) / ? ORDER BY timestamp ASC"
+            " GROUP BY hostname, bkt ORDER BY timestamp ASC"
         )
-        params.append(bucket)
     else:
         sql = (
             "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, "
@@ -474,18 +481,23 @@ def query_metrics(
         )
 
     with closing(open_connection()) as conn:
-        return conn.execute(sql, params).fetchall(), bucket
-
-
-def get_latest_cpu_cores(hostname: str) -> Optional[List[float]]:
-    """Per-core CPU % from the newest sample that has it (aggregated rows omit it)."""
-    with closing(open_connection()) as conn:
-        row = conn.execute(
-            "SELECT cpu_cores_json FROM metrics WHERE hostname = ? AND cpu_cores_json IS NOT NULL "
-            "ORDER BY timestamp DESC LIMIT 1",
-            (hostname,),
-        ).fetchone()
-    return json.loads(row["cpu_cores_json"]) if row else None
+        rows = conn.execute(sql, params).fetchall()
+        if bucket:
+            cores_sql = (
+                "SELECT hostname, " + bucket_expr + " AS bkt, CAST(j.key AS INTEGER) AS core, "
+                "AVG(j.value) AS pct FROM metrics, json_each(metrics.cpu_cores_json) AS j"
+                + where + " GROUP BY hostname, bkt, core"
+            )
+            try:
+                for r in conn.execute(cores_sql, params):
+                    series = cores.setdefault((r["hostname"], r["bkt"]), [])
+                    series.extend([None] * (r["core"] + 1 - len(series)))
+                    series[r["core"]] = round(r["pct"], 1)
+            except sqlite3.OperationalError:
+                # SQLite built without JSON1: per-core history is unavailable, the rest works.
+                logging.warning("SQLite JSON functions unavailable; per-core CPU history disabled")
+                cores = {}
+    return rows, bucket, cores
 
 
 def get_known_hostnames() -> Iterable[str]:
@@ -626,7 +638,7 @@ def data_endpoint():
     if max_points:
         max_points = min(max(max_points, 10), 5000)
 
-    rows, bucket = query_metrics(hostname, timeframe, max_points)
+    rows, bucket, cores = query_metrics(hostname, timeframe, max_points)
 
     metrics = []
     for row in rows:
@@ -647,14 +659,12 @@ def data_endpoint():
             "cpu_cores": json.loads(row["cpu_cores_json"]) if row["cpu_cores_json"] else None,
         }
         if bucket:
+            point["cpu_cores"] = cores.get((row["hostname"], row["bkt"]))
             for field in _AGG_FIELDS:
                 point[field] = _round_or_none(row[field])
         metrics.append(point)
 
-    payload: Dict[str, Any] = {"count": len(metrics), "bucket_seconds": bucket, "data": metrics}
-    if hostname:
-        payload["latest_cpu_cores"] = get_latest_cpu_cores(hostname)
-    return jsonify(payload)
+    return jsonify({"count": len(metrics), "bucket_seconds": bucket, "data": metrics})
 
 
 @app.route("/details", methods=["GET"])
