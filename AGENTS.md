@@ -131,6 +131,7 @@ statix/
 | `STATIX_RATE_LIMIT` | `60` | Max POST `/metrics` requests / IP / minute |
 | `STATIX_MAX_CONTENT_LENGTH` | `524288` | Max accepted body size (bytes) |
 | `STATIX_MAX_DETAILS_BYTES` | `65536` | Max stored details blob size (bytes) |
+| `STATIX_MAX_CHART_POINTS` | `600` | Target max rows per `GET /data` query; longer windows are bucket-averaged |
 
 ### Client (`client/system_stats/config.py`)
 
