@@ -10,7 +10,7 @@ import time
 import urllib.request
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 from flask import Flask, jsonify, render_template, request
 
@@ -54,6 +54,14 @@ MAX_CHART_POINTS: int = int(os.getenv("STATIX_MAX_CHART_POINTS", "600"))
 RAW_BUCKET_MAX_SECONDS: int = 30
 # "Nice" bucket sizes (seconds): 1m, 2m, 5m, 10m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d.
 BUCKET_STEPS = (60, 120, 300, 600, 900, 1800, 3600, 7200, 14400, 21600, 43200, 86400)
+# Hard ceiling on raw (un-bucketed) rows in one /data response; the newest rows are kept.
+# Stops `points=0` or a missing timeframe from streaming the whole table to an
+# unauthenticated caller. Dashboard raw views (<= 3 h) stay far below this.
+MAX_RAW_ROWS = 10000
+# Bucketed queries are the expensive ones (full-window scan + per-core JSON unpacking), so
+# their results are cached briefly. The cache is bounded: `hostname` is caller-supplied.
+BUCKET_CACHE_TTL_SECONDS = 15
+BUCKET_CACHE_MAX_ENTRIES = 64
 
 # ── security constants ────────────────────────────────────────────────────────
 # Set STATIX_API_KEY env var to require a bearer token on write/delete endpoints.
@@ -392,7 +400,8 @@ def delete_host_metrics(hostname: str) -> int:
     with closing(open_connection()) as conn:
         cursor = conn.execute("DELETE FROM metrics WHERE hostname = ?", (hostname,))
         conn.commit()
-        return cursor.rowcount
+    _bucket_cache_clear()
+    return cursor.rowcount
 
 
 def delete_host(hostname: str) -> Dict[str, int]:
@@ -406,7 +415,42 @@ def delete_host(hostname: str) -> Dict[str, int]:
             (hostname,),
         ).rowcount
         conn.commit()
+    _bucket_cache_clear()
     return {"metrics": metrics_deleted, "details": details_deleted}
+
+
+class MetricsResult(NamedTuple):
+    rows: Iterable[sqlite3.Row]
+    bucket: int  # seconds per bucket; 0 = raw rows
+    cores: Dict[Tuple[str, int], List[Optional[float]]]  # (hostname, bkt) -> per-core avg %
+    truncated: bool  # raw rows were capped at MAX_RAW_ROWS
+
+
+_bucket_cache: Dict[Tuple[Optional[str], Optional[str], int], Tuple[float, MetricsResult]] = {}
+_bucket_cache_lock = threading.Lock()
+
+
+def _bucket_cache_get(key: Tuple[Optional[str], Optional[str], int]) -> Optional[MetricsResult]:
+    with _bucket_cache_lock:
+        entry = _bucket_cache.get(key)
+        if entry and entry[0] > time.monotonic():
+            return entry[1]
+    return None
+
+
+def _bucket_cache_put(key: Tuple[Optional[str], Optional[str], int], result: MetricsResult) -> None:
+    now = time.monotonic()
+    with _bucket_cache_lock:
+        for stale in [k for k, (expires, _) in _bucket_cache.items() if expires <= now]:
+            del _bucket_cache[stale]
+        while len(_bucket_cache) >= BUCKET_CACHE_MAX_ENTRIES:
+            del _bucket_cache[min(_bucket_cache, key=lambda k: _bucket_cache[k][0])]
+        _bucket_cache[key] = (now + BUCKET_CACHE_TTL_SECONDS, result)
+
+
+def _bucket_cache_clear() -> None:
+    with _bucket_cache_lock:
+        _bucket_cache.clear()
 
 
 def _bucket_seconds(window: int, max_points: int) -> int:
@@ -426,11 +470,11 @@ def query_metrics(
     hostname: Optional[str],
     timeframe: Optional[str],
     max_points: int = 0,
-) -> Tuple[Iterable[sqlite3.Row], int, Dict[Tuple[str, int], List[Optional[float]]]]:
-    """Return (rows, bucket_seconds, cores).
+) -> MetricsResult:
+    """Query metrics. bucket == 0 means raw rows (capped at MAX_RAW_ROWS, newest kept).
 
-    bucket_seconds == 0 means raw rows. Otherwise rows are bucket aggregates and `cores`
-    maps (hostname, bucket id) -> per-core average CPU %; the bucket id is the row's `bkt`.
+    Otherwise rows are bucket aggregates and `cores` maps (hostname, bucket id) to per-core
+    average CPU %; the bucket id is the row's `bkt`. Bucketed results are cached briefly.
     """
     params: List[Any] = []
     conditions = []
@@ -443,13 +487,19 @@ def query_metrics(
     if timeframe:
         window = TIMEFRAME_PRESETS.get(timeframe)
         if window is None:
-            return [], 0, {}
+            return MetricsResult([], 0, {}, False)
         cutoff = int(time.time()) - window
         conditions.append("timestamp >= ?")
         params.append(cutoff)
         bucket = _bucket_seconds(window, max_points)
 
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    cache_key = (hostname, timeframe, bucket) if bucket else None
+    if cache_key:
+        cached = _bucket_cache_get(cache_key)
+        if cached:
+            return cached
 
     cores: Dict[Tuple[str, int], List[Optional[float]]] = {}
 
@@ -474,10 +524,11 @@ def query_metrics(
             " GROUP BY hostname, bkt ORDER BY timestamp ASC"
         )
     else:
+        # Newest MAX_RAW_ROWS (+1 to detect truncation), returned oldest-first.
         sql = (
-            "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, "
-            "net_write, swap_percent, load1, load5, load15, cpu_cores_json FROM metrics"
-            + where + " ORDER BY timestamp ASC"
+            "SELECT * FROM (SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, "
+            "net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json FROM metrics"
+            + where + " ORDER BY timestamp DESC LIMIT %d) ORDER BY timestamp ASC" % (MAX_RAW_ROWS + 1)
         )
 
     with closing(open_connection()) as conn:
@@ -497,7 +548,13 @@ def query_metrics(
                 # SQLite built without JSON1: per-core history is unavailable, the rest works.
                 logging.warning("SQLite JSON functions unavailable; per-core CPU history disabled")
                 cores = {}
-    return rows, bucket, cores
+    truncated = not bucket and len(rows) > MAX_RAW_ROWS
+    if truncated:
+        rows = rows[1:]  # drop the oldest extra row
+    result = MetricsResult(rows, bucket, cores, truncated)
+    if cache_key:
+        _bucket_cache_put(cache_key, result)
+    return result
 
 
 def get_known_hostnames() -> Iterable[str]:
@@ -638,7 +695,7 @@ def data_endpoint():
     if max_points:
         max_points = min(max(max_points, 10), 5000)
 
-    rows, bucket, cores = query_metrics(hostname, timeframe, max_points)
+    rows, bucket, cores, truncated = query_metrics(hostname, timeframe, max_points)
 
     metrics = []
     for row in rows:
@@ -664,7 +721,12 @@ def data_endpoint():
                 point[field] = _round_or_none(row[field])
         metrics.append(point)
 
-    return jsonify({"count": len(metrics), "bucket_seconds": bucket, "data": metrics})
+    return jsonify({
+        "count": len(metrics),
+        "bucket_seconds": bucket,
+        "truncated": truncated,
+        "data": metrics,
+    })
 
 
 @app.route("/details", methods=["GET"])

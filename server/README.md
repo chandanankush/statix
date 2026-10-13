@@ -93,7 +93,7 @@ All settings are environment variables passed to the container.
 
 | Variable | Default | Description |
 |---|---|---|
-| `STATIX_MAX_CHART_POINTS` | `600` | Target maximum rows per `GET /data` timeframe query. Windows that would exceed it are averaged into buckets (1 m … 1 d); windows whose bucket would be ≤ 30 s are returned raw. Callers can override per request with `?points=`. |
+| `STATIX_MAX_CHART_POINTS` | `600` | Target maximum rows per `GET /data` timeframe query. Windows that would exceed it are averaged into buckets (1 m … 1 d); windows whose bucket would be ≤ 30 s are returned raw. Callers can override per request with `?points=`. Bucketed results are cached in memory for 15 s (max 64 entries) so repeated requests don't re-scan the table. |
 
 ### Host status
 
@@ -134,7 +134,7 @@ docker run -d \
 | Method | Endpoint | Auth required | Description |
 |---|---|---|---|
 | `POST` | `/metrics` | No | Ingest a metrics payload from the forwarder. |
-| `GET` | `/data` | No | Query stored metrics. Params: `hostname`, `timeframe` (`15m`, `30m`, `1h`, `3h`, `6h`, `24h`, `7d`, `30d`), `points` (max rows to return, default `STATIX_MAX_CHART_POINTS`; `0` = raw samples). Long timeframes are **downsampled** server-side into epoch-aligned time buckets (`bucket_seconds` in the response; `0` = raw) so a 30-day query returns a few hundred rows, not every sample. Each point includes `cpu`, `ram`, `swap_percent`, `disk`, `disk_read`, `disk_write`, `net_read`, `net_write` (all in **MB/s** — dashboard displays network as Mbps ×8), `load1`, `load5`, `load15` (nullable), `cpu_cores` (list of per-core %, nullable; bucket averages when downsampled). In bucketed responses values are bucket **averages**, `timestamp` is the newest sample in the bucket, and `cpu_max`, `ram_max`, `swap_percent_max`, `disk_read_max`, `disk_write_max`, `net_read_max`, `net_write_max` carry the bucket peak. |
+| `GET` | `/data` | No | Query stored metrics. Params: `hostname`, `timeframe` (`15m`, `30m`, `1h`, `3h`, `6h`, `24h`, `7d`, `30d`), `points` (max rows to return, default `STATIX_MAX_CHART_POINTS`; `0` = raw samples, capped at the newest 10,000 rows; the response has `truncated: true` when the cap applied). Long timeframes are **downsampled** server-side into epoch-aligned time buckets (`bucket_seconds` in the response; `0` = raw) so a 30-day query returns a few hundred rows, not every sample. Each point includes `cpu`, `ram`, `swap_percent`, `disk`, `disk_read`, `disk_write`, `net_read`, `net_write` (all in **MB/s** — dashboard displays network as Mbps ×8), `load1`, `load5`, `load15` (nullable), `cpu_cores` (list of per-core %, nullable; bucket averages when downsampled). In bucketed responses values are bucket **averages**, `timestamp` is the newest sample in the bucket, and `cpu_max`, `ram_max`, `swap_percent_max`, `disk_read_max`, `disk_write_max`, `net_read_max`, `net_write_max` carry the bucket peak. |
 | `GET` | `/details` | No | Latest rich snapshot for a host. Param: `hostname`. |
 | `GET` | `/hosts` | No | List all known hosts with last-seen timestamps. |
 | `POST` | `/hosts/<hostname>/clean` | **Yes** | Delete metric history for a host (keeps host_details). |
