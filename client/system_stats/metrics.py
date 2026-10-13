@@ -470,12 +470,52 @@ def _get_cpu_temperature() -> Optional[float]:
     return None
 
 
+def _container_rss_bytes(docker_bin: str, names: List[str]) -> Dict[str, int]:
+    """Approximate memory per container as the summed RSS of its process tree.
+
+    Fallback for hosts whose kernel has the memory cgroup disabled (the Raspberry Pi OS
+    default, `cgroup_disable=memory`): there `docker stats` reports `0B / 0B` for every
+    container. Linux only, since on Docker Desktop the container PIDs live inside a VM.
+    RSS counts shared pages in every process that maps them, so this slightly overstates
+    multi-process containers. Containers that cannot be resolved are omitted.
+    """
+    if platform.system() != "Linux" or not names:
+        return {}
+    try:
+        result = subprocess.run(
+            [docker_bin, "inspect", "--format", "{{.Name}} {{.State.Pid}}"] + names,
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return {}
+    rss: Dict[str, int] = {}
+    for line in result.stdout.strip().splitlines():
+        name, _, pid_str = line.strip().rpartition(" ")
+        if not name or not pid_str.isdigit() or int(pid_str) <= 0:
+            continue
+        try:
+            root = psutil.Process(int(pid_str))
+            procs = [root] + root.children(recursive=True)
+        except psutil.Error:
+            continue
+        total = 0
+        for proc in procs:
+            try:
+                total += proc.memory_info().rss
+            except psutil.Error:
+                continue  # process exited or is not readable
+        rss[name.lstrip("/")] = total
+    return rss
+
+
 def _fetch_container_stats(docker_bin: str, names: List[str]) -> Dict[str, Dict[str, Any]]:
     """Run `docker stats --no-stream` for the given container names.
 
-    Returns {name: {cpu_pct, mem_pct, mem_used_bytes, mem_limit_bytes, net_rx_bytes, net_tx_bytes}}.
-    Result is cached for _DOCKER_STATS_CACHE_TTL seconds to avoid the ~1 s sampling delay
-    on every /system poll.
+    Returns {name: {cpu_pct, mem_pct, mem_used_bytes, mem_limit_bytes, mem_source,
+    net_rx_bytes, net_tx_bytes}}. `mem_source` is "cgroup" (Docker's own accounting) or
+    "rss" (process-tree fallback, see _container_rss_bytes); memory fields are None when
+    neither is available. Result is cached for _DOCKER_STATS_CACHE_TTL seconds to avoid
+    the ~1 s sampling delay on every /system poll.
     """
     if not names:
         return {}
@@ -518,9 +558,27 @@ def _fetch_container_stats(docker_bin: str, names: List[str]) -> Dict[str, Dict[
             "mem_pct": _parse_docker_percent(raw.get("MemPerc", "")),
             "mem_used_bytes": mem_used,
             "mem_limit_bytes": mem_limit,
+            "mem_source": "cgroup",
             "net_rx_bytes": net_rx,
             "net_tx_bytes": net_tx,
         }
+
+    # A zero limit means Docker has no memory accounting for the container (memory cgroup
+    # disabled). Report real numbers from the process tree if possible, else None — never 0%.
+    no_memory = [n for n, st in stats.items() if not st["mem_limit_bytes"]]
+    if no_memory:
+        rss = _container_rss_bytes(docker_bin, no_memory)
+        host_total = psutil.virtual_memory().total
+        for n in no_memory:
+            st = stats[n]
+            if n in rss and host_total:
+                st["mem_used_bytes"] = rss[n]
+                st["mem_limit_bytes"] = host_total
+                st["mem_pct"] = round(rss[n] / host_total * 100, 2)
+                st["mem_source"] = "rss"
+            else:
+                st["mem_used_bytes"] = st["mem_limit_bytes"] = st["mem_pct"] = None
+                st["mem_source"] = None
     return _cache_set("docker_stats", stats)
 
 
