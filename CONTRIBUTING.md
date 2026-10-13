@@ -14,7 +14,7 @@ statix is deliberately built with a small, readable stack — no magic framework
 | **FastAPI** — building a typed REST API, health checks, startup events | `client/system_stats/api.py` |
 | **Config via env vars** — twelve-factor app pattern | `client/system_stats/config.py` |
 | **Flask** — minimal web server, route decorators, template rendering | `server/server.py` |
-| **SQLite from stdlib** — schema init, parameterised queries, `closing()` | `server/server.py` → `_init_db`, `_store_metrics` |
+| **SQLite from stdlib** — schema init, parameterised queries, `closing()` | `server/server.py` → `ensure_database`, `insert_metric` |
 | **Security decorators** — bearer token auth, in-process rate limiting | `server/server.py` → `_require_api_key`, `_rate_limit` |
 | **Input validation** — hostname length, payload size caps | `server/server.py` → `POST /metrics` handler |
 | **Chart.js** — line charts, dynamic host filter | `server/templates/dashboard.html` |
@@ -39,7 +39,7 @@ Read the files in this order for the fastest mental model:
 3. **`client/system_stats/metrics.py`** — data collection, no dependencies other than psutil.
 4. **`client/system_stats/api.py`** — how metrics are served.
 5. **`client/system_stats/forwarder.py`** — how metrics are forwarded.
-6. **`server/server.py`** — ingest, store, serve; the entire server in ~500 lines.
+6. **`server/server.py`** — ingest, store, serve; the entire server in under 900 lines.
 7. **`server/templates/dashboard.html`** — the UI; Chart.js config and the fetch loops.
 8. **`AGENTS.md`** — rules and conventions for working in this codebase.
 
@@ -131,9 +131,9 @@ chore: bump gunicorn to 22.0
 1. **Collect** it in `client/system_stats/metrics.py` inside `get_system_info()`.
 2. **Verify** it appears in `GET /system` locally (`curl http://localhost:5001/system`).
 3. **Forward** it: add the field to the POST payload dict in `forwarder.py`.
-4. **Store** it: add a column in `server/server.py` → `_init_db()` `CREATE TABLE IF NOT EXISTS` statement, and populate it in `_store_metrics()`.
-5. **Expose** it: add it to the dict returned by `GET /data`.
-6. **Visualise** it: add a new Chart.js dataset or stat card in `dashboard.html`.
+4. **Store** it: add a column in `server/server.py` → `ensure_database()` using `_ensure_column(...)` (existing databases migrate in place), and populate it in `insert_metric()`.
+5. **Expose** it: add it to the dict returned by `GET /data`, and to **both** SELECTs in `query_metrics()` — raw rows, and the downsampled aggregate query (`AVG(...)`, plus `MAX(...)` and `_AGG_FIELDS` if the peak matters).
+6. **Visualise** it: add a chart card and a `CHART_SERIES` entry in `dashboard.html` (shared time axis, peak line, stable Y scale), or a stat card.
 7. **Document** it: update the config table in `client/README.md` and `server/README.md` if any new env var was introduced.
 
 ### Adding a new API endpoint

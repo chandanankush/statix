@@ -28,13 +28,13 @@ statix is a self-hosted system monitoring stack. The client (FastAPI + psutil) r
 ## Adding a new metric
 1. Collect in `metrics.py` → `get_system_info()`.
 2. Add to forwarder POST payload in `forwarder.py` if it needs a dedicated DB column.
-3. Add DB column in `server.py` → `_init_db()`.
-4. Populate in `_store_metrics()`, expose in `GET /data`.
-5. Visualise in `dashboard.html`.
+3. Add DB column in `server.py` → `ensure_database()` via `_ensure_column()`.
+4. Populate in `insert_metric()`, expose in `GET /data` (add to both SELECTs in `query_metrics()`: raw and downsampled).
+5. Visualise in `dashboard.html` (card + `CHART_SERIES` entry).
 6. Update config tables in `server/README.md` and `client/README.md` if new env vars added.
 
 ## Environment variable config
-- Server vars: `DATABASE_PATH`, `STATIX_API_KEY`, `STATIX_RATE_LIMIT`, `STATIX_MAX_CONTENT_LENGTH`, `STATIX_MAX_DETAILS_BYTES`
+- Server vars: `DATABASE_PATH`, `STATIX_API_KEY`, `STATIX_RATE_LIMIT`, `STATIX_MAX_CONTENT_LENGTH`, `STATIX_MAX_DETAILS_BYTES`, `STATIX_MAX_CHART_POINTS`
 - Client vars: `SYSTEM_STATS_HOST`, `SYSTEM_STATS_PORT`, `MONITORING_SERVER_METRICS_URL`, `SYSTEM_STATS_FORWARD_INTERVAL`, `SYSTEM_STATS_DISK_PATH`
 
 ## Do not

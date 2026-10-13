@@ -55,7 +55,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/cl
 ```
 
 Prompts:
-- **Monitoring server URL** — e.g. `http://192.168.0.209:5050`
+- **Monitoring server URL** — e.g. `http://<server-ip>:5050`
 - **Forwarding interval** — defaults to `30` seconds
 
 **What the installer does:**
@@ -113,7 +113,7 @@ Your server URL and interval are read from the existing service files so you are
 
 ### Server
 ```sh
-curl http://192.168.0.209:5050/health
+curl http://<server-ip>:5050/health
 ```
 Expected: `"status":"ok"` and `"version"` matches `"latest_version"`.
 
@@ -139,7 +139,7 @@ curl http://127.0.0.1:5001/health
 ```
 
 ### Dashboard version panel
-Open `http://192.168.0.209:5050/dashboard`. The version status panel shows:
+Open `http://<server-ip>:5050/dashboard`. The version status panel shows:
 - ✓ green — server and all clients are on the latest commit
 - ⚠ yellow — something is outdated; follow the on-screen command
 - ℹ grey — GitHub was unreachable (no internet) or running from source

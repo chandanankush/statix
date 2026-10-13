@@ -10,22 +10,22 @@ Before listing gaps it is important to be precise about what is already working,
 
 | Area | Current capability |
 |---|---|
-| CPU | Aggregate CPU %, frequency, core count, CPU temperature (Linux + macOS Intel) |
-| Memory | RAM used / total; swap collected by agent but **not stored as time-series** |
+| CPU | Aggregate and per-core CPU % history, frequency, core count, CPU temperature history (Linux + macOS Intel) |
+| Memory | RAM used / total, and swap, as time-series |
 | Disk | Root-partition usage only; aggregate disk I/O (read + write bytes, single counter) |
 | Network | All active interfaces — IP, speed, link type, and I/O bytes per interface |
-| Containers | Docker container list, run state, image update-available badge |
+| Containers | Docker container list, run state, image update-available badge, per-container CPU / memory / network |
 | System info | Uptime, CPU model, OS version, pending OS/package updates |
 | Alerting | Webhook POST when CPU % or RAM % crosses a global threshold; configurable cooldown |
 | Auth | Optional single shared bearer token (`STATIX_API_KEY`); no user accounts |
-| Dashboard | Chart.js; **dark/light theme already shipped**; drag-reorder + hide cards; 1 h / 24 h / 7 d views |
-| Retention | `STATIX_RETENTION_DAYS` env var, **default 30 days already stored**; UI only queries up to 7 d |
+| Dashboard | Chart.js; **dark/light theme already shipped**; drag-reorder + hide cards; 15 m – 30 d views, downsampled server-side for long ranges |
+| Retention | `STATIX_RETENTION_DAYS` env var, **default 30 days stored** and queryable from the dashboard |
 | Multi-host | Cycle or pin to a specific host |
 | Deployment | Docker (amd64 + arm64), one-liner Bash installer, Docker Compose |
 
 Two items that appeared in an earlier priority suggestion are **not gaps**:
 - **Dark mode** — already shipped.
-- **Configurable retention > 7 days** — server already retains 30 days by default. The real gap is the dashboard UI selector (see P1-4 below).
+- **Configurable retention > 7 days** — server already retains 30 days by default. The remaining gap was the dashboard UI selector, now shipped (see P1-4 below).
 
 ---
 
@@ -79,7 +79,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 - Agent (`metrics.py`): switched to `psutil.cpu_percent(percpu=True, interval=0.1)`, computes aggregate as mean, adds `cpu.cores_percent` list to `/system` response.
 - Forwarder (`forwarder.py`): forwards `cpu_cores` list alongside the existing aggregate.
 - Server (`server.py`): adds `cpu_cores_json TEXT` column via `_ensure_column` (zero-downtime migration), stores as JSON, returns parsed in `/data`.
-- Dashboard: new **Per-Core CPU (%)** horizontal bar chart (`chart-cpu-cores`) — color-coded cyan (<50 %), amber (50–80 %), red (≥80 %). Registered in `CHART_WIDGETS` drag/hide panel. Shows the latest poll's snapshot so it always reflects current core distribution.
+- Dashboard: **Per-Core CPU (%)** (`chart-cpu-cores`), registered in the `CHART_WIDGETS` drag/hide panel. Originally a latest-sample bar chart; it is now a **history line chart, one line per core** on the shared time axis. Downsampled ranges plot per-bucket core averages (computed in SQL with `json_each`). The legend and index tooltip are disabled above 16 cores.
 
 ---
 
@@ -94,7 +94,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 **What was built:**
 - Server (`server.py`): added `"30d": 30 * 24 * 60 * 60` to `TIMEFRAME_PRESETS` and `"30d": "Last 30 days"` to `TIMEFRAME_LABELS`.
 - Dashboard: the timeframe `<select>` is Jinja-templated from `TIMEFRAME_PRESETS`, so the **Last 30 days** option appears automatically — no HTML change needed.
-- Note: at 30-second poll intervals, 30 days ≈ 86 000 raw rows per host. Rendering is acceptable as a first pass; server-side downsampling for long ranges is tracked as P3-5.
+- Note: at 30-second poll intervals, 30 days ≈ 86 000 raw rows per host. Raw rendering was too heavy, so `/data` now downsamples long ranges at query time (see P3-5).
 
 ---
 
@@ -110,6 +110,7 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 - Agent (`metrics.py`): new `_get_all_sensors()` function calls `psutil.sensors_temperatures()` and returns `{sensor_name: [{label, current_c, high_c, critical_c}]}`. Returns `null` on macOS and Windows where the API is unavailable. Added as `"sensors"` key in the `/system` response — carried to the server in the `details` blob.
 - Dashboard: new **Temperatures** card (`data-widget="temperatures"`) hidden entirely when `details.sensors` is null or empty. When sensors are present, groups readings by sensor name; each row color-codes the current reading — green (below 90% of `high_c`), amber (≥90% of `high_c`), red (≥90% of `critical_c`). Registered in `CARD_WIDGETS` drag/hide panel.
 - No server changes needed — sensor data rides in the existing `details` JSON blob.
+- Later changes: the all-sensors **Temperatures** card was removed as redundant. Instead, **CPU temperature is stored per sample** (read from `details.cpu.temperature_c`, so existing agents need no upgrade) and charted as **CPU Temperature (°C)** with a peak line; the chart is hidden for hosts without a sensor. History is not backfilled.
 - Note: `STATIX_SENSOR_INCLUDE`/`STATIX_SENSOR_EXCLUDE` env-var filtering remains a future enhancement.
 
 ---
@@ -147,7 +148,8 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 **What was built:**
 - Agent (`metrics.py`): `_fetch_container_stats()` calls `docker stats --no-stream --format "{{json .}}"` for all running containers; parses CPU %, memory (used/limit bytes + %), and net I/O (rx/tx bytes). Result cached 20 s to absorb the ~1 s kernel sampling delay without impacting every `/system` poll. Stats merged into each container entry as `container.stats`.
 - Agent: `STATIX_EXCLUDE_CONTAINERS` env var (comma-separated glob patterns via `fnmatch`) filters containers from both the list and stats collection before they reach the dashboard.
-- Dashboard: Docker card restructured with a header row (name + state badge) and a stats row below each running container — CPU bar (cyan/amber/red) and memory bar (blue/amber/red) with `used / limit` byte labels.
+- Dashboard: Docker card is a compact table, one row per container — state with uptime/health, CPU bar, memory bar, cumulative network in/out, published ports, update badge — with fleet totals above it.
+- Memory fallback: when Docker reports `0B / 0B` (kernel memory cgroup disabled, the Raspberry Pi OS default) the agent estimates memory from the summed RSS of the container's process tree (`mem_source: "rss"`, shown as `~`), or reports `null` (shown as `n/a`) — never 0 %.
 - Server / time-series sparklines: deferred — current snapshot via the `details` blob covers the primary use case. A dedicated `container_metrics` table with sparklines remains a future enhancement.
 
 ---
@@ -256,7 +258,9 @@ Two items that appeared in an earlier priority suggestion are **not gaps**:
 
 ---
 
-### P3-5 · Server-Side Data Downsampling
+### P3-5 · Server-Side Data Downsampling ◐ Partially shipped
+
+**Shipped:** query-time downsampling. `GET /data` averages long timeframes into epoch-aligned buckets (with per-bucket peaks) so a 30-day query returns a few hundred rows (`STATIX_MAX_CHART_POINTS`, default 600), with a short in-memory cache and a hard cap on raw rows. **Still open:** compacting *stored* rows (nightly job) and rollup tables, which matter once many hosts or many-core hosts make the per-query scan slow.
 
 **Gap:** Every poll cycle writes one raw row. At a 30-second interval, 30 days of data per host = ~86 000 rows. The 30-day chart selector (P1-4) will be slow to query and slow to render at this volume.
 
@@ -649,7 +653,7 @@ The following items also appear in competition but were not in the original prio
 | P3-2 | OAuth2 / OIDC login | Phase 3 — Larger effort / Optional | High |
 | P3-3 | Token-based agent pairing | Phase 3 — Larger effort / Optional | High |
 | P3-4 | i18n foundation | Phase 3 — Larger effort / Optional | High |
-| P3-5 | Server-side data downsampling | Phase 3 — Larger effort / Optional | High |
+| P3-5 ◐ | Server-side data downsampling (query-time shipped; storage compaction open) | Phase 3 — Larger effort / Optional | High |
 | P3-6 | S3-compatible backup and restore | Phase 3 — Larger effort / Optional | High |
 | P+-1 | Battery status | Beyond priority list | Low |
 | P+-2 | Multiple disk partitions | Beyond priority list | Medium |
