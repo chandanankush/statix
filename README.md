@@ -5,7 +5,7 @@
 
 Monitor your home lab from one self-hosted dashboard. A Python agent collects host metrics on macOS or Raspberry Pi/Linux; a Flask server stores them in SQLite and displays CPU, memory, disk, network, and Docker details.
 
-[Install the server](#1-start-the-server) · [Install an agent](#2-connect-an-agent) · [Questions and feedback](https://github.com/chandanankush/statix/discussions)
+[Install the server](#1-start-the-server) · [Install an agent](#2-install-the-agent-on-each-host) · [Questions and feedback](https://github.com/chandanankush/statix/discussions)
 
 ![Actual statix dashboard running locally with invented host data](docs/assets/dashboard-demo.png)
 
@@ -22,40 +22,70 @@ See [dashboard details](docs/dashboard-features.md) for platform-dependent metri
 
 ## Quick start
 
-Requirements: Docker for the server; Python 3.9+ for agents. The installers target macOS and Debian-based Linux/Raspberry Pi OS. Other environments need their own validation. Review downloaded installer scripts before running them: they create persistent services.
+Requirements: Docker for the server; Python 3.9+ for agents. The installers target macOS and Debian-based Linux/Raspberry Pi OS (other environments need their own validation). The installers create persistent services, so you may prefer to read a script before running it — see [Review before running](#review-before-running).
 
 ### 1. Start the server
 
-For a local trial, bind the dashboard to your Mac or server's loopback interface:
+Requires Docker. Pick one:
 
+**One-line installer** (pulls the published image, prompts for a port and data directory):
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/server/install.sh)
+```
+
+**Docker:**
 ```sh
 docker run -d \
   --name statix \
   --restart unless-stopped \
-  -p 127.0.0.1:5050:5000 \
+  -p 5050:5000 \
   -v statix_data:/app/data \
   midnightappcoder/statix:latest
 ```
+Use `-p 127.0.0.1:5050:5000` instead for a local-only trial; agents on other machines then cannot reach it.
 
-Open <http://localhost:5050/dashboard>. To receive metrics from other machines, configure an appropriate network binding and access controls first; see [server setup](server/README.md). This local-trial command accepts agents on the same machine only.
-
-For the interactive installer, download and review [server/install.sh](server/install.sh), then run it. [Docker Compose](docker-compose.yml) is also available after cloning this repository.
-
-### 2. Connect an agent
-
-Download and review [client/install.sh](client/install.sh), then run:
-
+**Docker Compose** (from a clone of this repository):
 ```sh
-bash client/install.sh --server-url http://127.0.0.1:5050 --interval 30
+docker compose up -d
 ```
 
-Run this from a cloned repository on the agent host. For a remote agent, replace the URL with your reachable monitoring server. The installer registers a stats service and forwarder; running it again upgrades the installation while retaining configuration.
+Open <http://localhost:5050/dashboard>. Re-running the installer upgrades to the latest image and keeps your data. Ports, data volume, API key, retention and alerting are covered in the [server guide](server/README.md).
 
-See the [agent guide](client/README.md) for service management, environment variables, metric payloads, and [uninstallation](client/README.md#uninstall).
+### 2. Install the agent on each host
+
+On every macOS or Raspberry Pi/Linux machine you want to monitor:
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh)
+```
+It prompts for your server URL (e.g. `http://<server-ip>:5050`) and the forwarding interval. To skip the prompts:
+```sh
+curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh \
+  | bash -s -- --server-url http://<server-ip>:5050 --interval 30
+```
+The installer sets up a stats service and a forwarder that start at login/boot. Re-running the same command upgrades the agent and restarts the services without losing your configuration.
+
+To uninstall:
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/chandanankush/statix/main/client/uninstall.sh)
+```
+
+See the [agent guide](client/README.md) for service management, environment variables, metric payloads, and troubleshooting.
+
+*Optional — CPU temperature on macOS Intel:* `brew install osx-cpu-temp`. It is picked up automatically once on `PATH`; not available on Apple Silicon.
 
 ### 3. Explore metrics
 
-Choose a hostname and timeframe in the dashboard. Switch to dark mode or customize cards to focus on the information you need. The [server guide](server/README.md) covers the API, data retention, and optional webhook configuration.
+Open `http://<server-ip>:5050/dashboard`, then choose a hostname and timeframe. Switch to dark mode or customize cards to focus on the information you need.
+
+### Review before running
+
+Piping a script from the internet into `bash` is convenient but trusts that script. To read it first, download, inspect, then run it:
+```sh
+curl -fsSLO https://raw.githubusercontent.com/chandanankush/statix/main/client/install.sh
+less install.sh
+bash install.sh --server-url http://<server-ip>:5050 --interval 30
+```
+The same works for `server/install.sh` and `client/uninstall.sh`, or run the copies from a clone of this repository.
 
 ## Limitations and security
 
