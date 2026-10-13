@@ -2003,60 +2003,69 @@
 
         const cpuChart = new Chart(document.getElementById('cpuChart'), chartConfig('CPU %', '#ff6384', 'rgba(255, 99, 132, 0.2)'));
 
-        // ── Per-core CPU bar chart ───────────────────────────────────────────
+        // ── Per-core CPU history: one line per core ──────────────────────────
+        // Datasets are created per core on first data (see updateCoreChart).
         const coreChart = new Chart(document.getElementById('coreChart'), {
-            type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Core %', data: [], backgroundColor: [] }] },
+            type: 'line',
+            data: { datasets: [] },
             options: {
-                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { display: false },
+                    legend: { labels: { color: currentChartStyles.text } },
                     tooltip: {
                         backgroundColor: currentChartStyles.tooltipBg,
                         titleColor: currentChartStyles.tooltipText,
                         bodyColor: currentChartStyles.tooltipText,
                         borderColor: currentChartStyles.grid,
                         borderWidth: 1,
-                        callbacks: { label: ctx => ` ${ctx.parsed.x.toFixed(1)}%` },
+                        callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` },
                     },
                 },
                 scales: {
                     x: {
-                        min: 0, max: 100,
-                        ticks: { color: currentChartStyles.text, callback: v => v + '%' },
+                        ...TIME_X_AXIS,
+                        ticks: { autoSkip: true, maxTicksLimit: 10, color: currentChartStyles.text },
                         grid: { color: currentChartStyles.grid },
                     },
                     y: {
-                        ticks: { color: currentChartStyles.text },
+                        min: 0,
+                        max: 100,
+                        ticks: { stepSize: 10, color: currentChartStyles.text },
                         grid: { color: currentChartStyles.grid },
                     },
                 },
             },
         });
 
-        function _coreColor(pct) {
-            if (pct >= 80) return 'rgba(239,68,68,0.8)';   // red
-            if (pct >= 50) return 'rgba(245,158,11,0.8)';  // amber
-            return 'rgba(6,182,212,0.8)';                   // cyan
-        }
+        // Many cores: a legend and a per-core tooltip would cover the chart.
+        const CORE_LEGEND_MAX = 16;
 
-        function updateCoreChart(metrics, latestCores) {
-            // Aggregated rows carry no per-core data; the server sends the newest sample separately.
-            const cores = Array.isArray(latestCores)
-                ? latestCores
-                : ([...metrics].reverse().find(m => Array.isArray(m.cpu_cores)) || {}).cpu_cores;
-            if (!cores) {
-                coreChart.data.labels = [];
-                coreChart.data.datasets[0].data = [];
-                coreChart.data.datasets[0].backgroundColor = [];
-                coreChart.update('none');
-                return;
+        function updateCoreChart(metrics) {
+            const count = metrics.reduce(
+                (n, m) => (Array.isArray(m.cpu_cores) ? Math.max(n, m.cpu_cores.length) : n), 0);
+            if (coreChart.data.datasets.length !== count) {
+                coreChart.data.datasets = Array.from({ length: count }, (_, i) => {
+                    const color = `hsl(${Math.round((i * 360) / count)}, 70%, 52%)`;
+                    return {
+                        label: `Core ${i}`,
+                        data: [],
+                        borderColor: color,
+                        backgroundColor: color,
+                        fill: false,
+                        tension: 0.25,
+                        parsing: false,
+                        spanGaps: false,
+                    };
+                });
+                coreChart.options.plugins.legend.display = count <= CORE_LEGEND_MAX;
+                coreChart.options.interaction.mode = count <= CORE_LEGEND_MAX ? 'index' : 'nearest';
             }
-            coreChart.data.labels = cores.map((_, i) => `Core ${i}`);
-            coreChart.data.datasets[0].data = cores;
-            coreChart.data.datasets[0].backgroundColor = cores.map(_coreColor);
+            coreChart.data.datasets.forEach((ds, i) => {
+                ds.data = buildPoints(metrics, (m) => (m.cpu_cores ? m.cpu_cores[i] : null));
+            });
+            pinTimeWindow(coreChart);
             coreChart.update('none');
         }
 
@@ -2278,7 +2287,7 @@
 
         // ── Time axis, peak series and stable Y scales ───────────────────────
         // Points are {x: epoch ms, y}. The server downsamples long ranges, so no per-point styling is needed.
-        [cpuChart, loadChart, ramChart, diskChart, netChart].forEach((chart) => {
+        [cpuChart, coreChart, loadChart, ramChart, diskChart, netChart].forEach((chart) => {
             Object.assign(chart.options.scales.x.ticks, { source: 'auto', autoSkip: true, maxTicksLimit: 8, maxRotation: 0 });
             chart.options.interaction = { mode: 'index', intersect: false };
             chart.options.plugins.legend.labels.filter = (item) => !item.text.endsWith(' peak');
@@ -2494,11 +2503,24 @@
                 if (prev !== null && m.timestamp - prev > maxGap) {
                     out.push({ x: (prev + 1) * 1000, y: null });
                 }
-                const raw = m[field];
+                const raw = typeof field === 'function' ? field(m) : m[field];
                 out.push({ x: m.timestamp * 1000, y: raw == null ? null : (map ? map(raw) : raw) });
                 prev = m.timestamp;
             }
             return out;
+        }
+
+        // Pin the X axis to the selected window so the range never rescales to the data.
+        function pinTimeWindow(chart) {
+            const windowSeconds = timeframePresets[timeframeFilter.value];
+            const x = chart.options.scales.x;
+            if (windowSeconds) {
+                x.max = Date.now();
+                x.min = x.max - windowSeconds * 1000;
+            } else {
+                delete x.min;
+                delete x.max;
+            }
         }
 
         function renderSeries(id, metrics) {
@@ -2512,16 +2534,7 @@
                         lastBucketSeconds > 0 ? buildPoints(metrics, s.peak, s.map) : [];
                 }
             });
-            // Pin the X axis to the selected window so the range never rescales to the data.
-            const windowSeconds = timeframePresets[timeframeFilter.value];
-            const x = chart.options.scales.x;
-            if (windowSeconds) {
-                x.max = Date.now();
-                x.min = x.max - windowSeconds * 1000;
-            } else {
-                delete x.min;
-                delete x.max;
-            }
+            pinTimeWindow(chart);
             if (yFloor) applyStableYMax(chart, id, yFloor);
             chart.update('none');
         }
@@ -3416,7 +3429,7 @@
                 lastBucketSeconds = payload.bucket_seconds || 0;
 
                 updateChartData(cpuChart, metrics, 'cpu');
-                updateCoreChart(metrics, payload.latest_cpu_cores);
+                updateCoreChart(metrics);
                 updateLoadChart(metrics);
                 updateMemoryChart(metrics);
                 updateDiskChart(metrics);
