@@ -188,6 +188,7 @@ def ensure_database() -> None:
         _ensure_column(conn, "metrics", "load5",  "REAL")
         _ensure_column(conn, "metrics", "load15", "REAL")
         _ensure_column(conn, "metrics", "cpu_cores_json", "TEXT")
+        _ensure_column(conn, "metrics", "temperature", "REAL")
         conn.commit()
 
     # Start background retention thread (daemon — exits cleanly with gunicorn).
@@ -315,8 +316,8 @@ def insert_metric(payload: Dict[str, float]) -> None:
     with closing(open_connection()) as conn:
         conn.execute(
             """
-            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO metrics(timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json, temperature)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["timestamp"],
@@ -333,6 +334,7 @@ def insert_metric(payload: Dict[str, float]) -> None:
                 payload.get("load5"),
                 payload.get("load15"),
                 json.dumps(payload["cpu_cores"]) if payload.get("cpu_cores") else None,
+                payload.get("temperature"),
             ),
         )
         conn.commit()
@@ -519,6 +521,7 @@ def query_metrics(
             "AVG(net_write) AS net_write, MAX(net_write) AS net_write_max, "
             "AVG(swap_percent) AS swap_percent, MAX(swap_percent) AS swap_percent_max, "
             "AVG(load1) AS load1, AVG(load5) AS load5, AVG(load15) AS load15, "
+            "AVG(temperature) AS temperature, MAX(temperature) AS temperature_max, "
             "NULL AS cpu_cores_json, " + bucket_expr + " AS bkt "
             "FROM metrics" + where +
             " GROUP BY hostname, bkt ORDER BY timestamp ASC"
@@ -527,7 +530,8 @@ def query_metrics(
         # Newest MAX_RAW_ROWS (+1 to detect truncation), returned oldest-first.
         sql = (
             "SELECT * FROM (SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, "
-            "net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json FROM metrics"
+            "net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json, temperature "
+            "FROM metrics"
             + where + " ORDER BY timestamp DESC LIMIT %d) ORDER BY timestamp ASC" % (MAX_RAW_ROWS + 1)
         )
 
@@ -647,6 +651,7 @@ def receive_metrics():
             "load5":  float(payload["load5"])  if payload.get("load5")  is not None else None,
             "load15": float(payload["load15"]) if payload.get("load15") is not None else None,
             "cpu_cores": payload.get("cpu_cores") if isinstance(payload.get("cpu_cores"), list) else None,
+            "temperature": _extract_temperature(payload),
         }
     except (TypeError, ValueError):
         logging.warning("Invalid metric payload from %s: bad field types", request.remote_addr)
@@ -670,8 +675,32 @@ def receive_metrics():
 
 _AGG_FIELDS = (
     "cpu_max", "ram_max", "disk_read_max", "disk_write_max",
-    "net_read_max", "net_write_max", "swap_percent_max",
+    "net_read_max", "net_write_max", "swap_percent_max", "temperature_max",
 )
+
+
+# Sanity range for a CPU temperature reading (°C); anything else is stored as NULL.
+_TEMP_MIN_C, _TEMP_MAX_C = -50.0, 200.0
+
+
+def _extract_temperature(payload: Dict[str, Any]) -> Optional[float]:
+    """CPU temperature in °C from a top-level `temperature`, else details.cpu.temperature_c.
+
+    Older clients only send it inside `details`, so reading it there keeps them working
+    without an upgrade. Non-numeric or implausible values become None.
+    """
+    raw = payload.get("temperature")
+    if raw is None:
+        details = payload.get("details")
+        cpu = details.get("cpu") if isinstance(details, dict) else None
+        raw = cpu.get("temperature_c") if isinstance(cpu, dict) else None
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if _TEMP_MIN_C <= value <= _TEMP_MAX_C else None
 
 
 def _round_or_none(value: Any) -> Any:
@@ -713,6 +742,7 @@ def data_endpoint():
             "load1": _round_or_none(row["load1"]),
             "load5": _round_or_none(row["load5"]),
             "load15": _round_or_none(row["load15"]),
+            "temperature": _round_or_none(row["temperature"]),
             "cpu_cores": json.loads(row["cpu_cores_json"]) if row["cpu_cores_json"] else None,
         }
         if bucket:
