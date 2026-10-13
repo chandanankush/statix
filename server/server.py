@@ -10,7 +10,7 @@ import time
 import urllib.request
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from flask import Flask, jsonify, render_template, request
 
@@ -46,6 +46,14 @@ TIMEFRAME_LABELS: Dict[str, str] = {
     "7d": "Last 7 days",
     "30d": "Last 30 days",
 }
+
+# Chart downsampling. GET /data aggregates long timeframes into time buckets so a
+# 30-day query returns ~MAX_CHART_POINTS rows instead of every raw sample.
+MAX_CHART_POINTS: int = int(os.getenv("STATIX_MAX_CHART_POINTS", "600"))
+# Windows needing a bucket of at most this many seconds are returned raw.
+RAW_BUCKET_MAX_SECONDS: int = 30
+# "Nice" bucket sizes (seconds): 1m, 2m, 5m, 10m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d.
+BUCKET_STEPS = (60, 120, 300, 600, 900, 1800, 3600, 7200, 14400, 21600, 43200, 86400)
 
 # ── security constants ────────────────────────────────────────────────────────
 # Set STATIX_API_KEY env var to require a bearer token on write/delete endpoints.
@@ -401,10 +409,28 @@ def delete_host(hostname: str) -> Dict[str, int]:
     return {"metrics": metrics_deleted, "details": details_deleted}
 
 
-def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable[sqlite3.Row]:
-    sql = "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, net_write, swap_percent, load1, load5, load15, cpu_cores_json FROM metrics"
-    params = []
+def _bucket_seconds(window: int, max_points: int) -> int:
+    """Return the aggregation bucket (seconds) for a window, or 0 to return raw rows."""
+    if max_points <= 0:
+        return 0
+    needed = window / max_points
+    if needed <= RAW_BUCKET_MAX_SECONDS:
+        return 0
+    for step in BUCKET_STEPS:
+        if step >= needed:
+            return step
+    return BUCKET_STEPS[-1]
+
+
+def query_metrics(
+    hostname: Optional[str],
+    timeframe: Optional[str],
+    max_points: int = 0,
+) -> Tuple[Iterable[sqlite3.Row], int]:
+    """Return (rows, bucket_seconds). bucket_seconds == 0 means raw, unaggregated rows."""
+    params: List[Any] = []
     conditions = []
+    bucket = 0
 
     if hostname:
         conditions.append("hostname = ?")
@@ -413,18 +439,53 @@ def query_metrics(hostname: Optional[str], timeframe: Optional[str]) -> Iterable
     if timeframe:
         window = TIMEFRAME_PRESETS.get(timeframe)
         if window is None:
-            return []
+            return [], 0
         cutoff = int(time.time()) - window
         conditions.append("timestamp >= ?")
         params.append(cutoff)
+        bucket = _bucket_seconds(window, max_points)
 
-    if conditions:
-        sql += " WHERE " + " AND ".join(conditions)
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
 
-    sql += " ORDER BY timestamp ASC"
+    if bucket:
+        # Buckets are aligned to the epoch so earlier buckets stay stable as new data
+        # arrives. timestamp is MAX() so the newest bucket carries the true last-seen time.
+        sql = (
+            "SELECT MAX(timestamp) AS timestamp, hostname, "
+            "AVG(cpu) AS cpu, MAX(cpu) AS cpu_max, "
+            "AVG(ram) AS ram, MAX(ram) AS ram_max, "
+            "AVG(disk) AS disk, "
+            "AVG(disk_read) AS disk_read, MAX(disk_read) AS disk_read_max, "
+            "AVG(disk_write) AS disk_write, MAX(disk_write) AS disk_write_max, "
+            "AVG(net_read) AS net_read, MAX(net_read) AS net_read_max, "
+            "AVG(net_write) AS net_write, MAX(net_write) AS net_write_max, "
+            "AVG(swap_percent) AS swap_percent, MAX(swap_percent) AS swap_percent_max, "
+            "AVG(load1) AS load1, AVG(load5) AS load5, AVG(load15) AS load15, "
+            "NULL AS cpu_cores_json "
+            "FROM metrics" + where +
+            " GROUP BY hostname, CAST(timestamp AS INTEGER) / ? ORDER BY timestamp ASC"
+        )
+        params.append(bucket)
+    else:
+        sql = (
+            "SELECT timestamp, hostname, cpu, ram, disk, disk_read, disk_write, net_read, "
+            "net_write, swap_percent, load1, load5, load15, cpu_cores_json FROM metrics"
+            + where + " ORDER BY timestamp ASC"
+        )
 
     with closing(open_connection()) as conn:
-        return conn.execute(sql, params).fetchall()
+        return conn.execute(sql, params).fetchall(), bucket
+
+
+def get_latest_cpu_cores(hostname: str) -> Optional[List[float]]:
+    """Per-core CPU % from the newest sample that has it (aggregated rows omit it)."""
+    with closing(open_connection()) as conn:
+        row = conn.execute(
+            "SELECT cpu_cores_json FROM metrics WHERE hostname = ? AND cpu_cores_json IS NOT NULL "
+            "ORDER BY timestamp DESC LIMIT 1",
+            (hostname,),
+        ).fetchone()
+    return json.loads(row["cpu_cores_json"]) if row else None
 
 
 def get_known_hostnames() -> Iterable[str]:
@@ -538,35 +599,62 @@ def receive_metrics():
     return jsonify({"status": "ok"})
 
 
+_AGG_FIELDS = (
+    "cpu_max", "ram_max", "disk_read_max", "disk_write_max",
+    "net_read_max", "net_write_max", "swap_percent_max",
+)
+
+
+def _round_or_none(value: Any) -> Any:
+    return round(value, 3) if isinstance(value, float) else value
+
+
 @app.route("/data", methods=["GET"])
 def data_endpoint():
     hostname = request.args.get("hostname")
     timeframe = request.args.get("timeframe")
-
-    rows = query_metrics(hostname, timeframe)
     if timeframe and timeframe not in TIMEFRAME_PRESETS:
         return jsonify({"error": "Unsupported timeframe"}), 400
 
-    metrics = [
-        {
+    # `points` caps the rows returned for a timeframe; 0 returns raw samples.
+    try:
+        max_points = int(request.args.get("points", MAX_CHART_POINTS))
+    except ValueError:
+        return jsonify({"error": "points must be an integer"}), 400
+    if max_points < 0:
+        return jsonify({"error": "points must be >= 0"}), 400
+    if max_points:
+        max_points = min(max(max_points, 10), 5000)
+
+    rows, bucket = query_metrics(hostname, timeframe, max_points)
+
+    metrics = []
+    for row in rows:
+        point = {
             "timestamp": row["timestamp"],
             "hostname": row["hostname"],
-            "cpu": row["cpu"],
-            "ram": row["ram"],
-            "disk": row["disk"],
-            "disk_read": row["disk_read"],
-            "disk_write": row["disk_write"],
-            "net_read": row["net_read"],
-            "net_write": row["net_write"],
-            "swap_percent": row["swap_percent"],
-            "load1":  row["load1"],
-            "load5":  row["load5"],
-            "load15": row["load15"],
+            "cpu": _round_or_none(row["cpu"]),
+            "ram": _round_or_none(row["ram"]),
+            "disk": _round_or_none(row["disk"]),
+            "disk_read": _round_or_none(row["disk_read"]),
+            "disk_write": _round_or_none(row["disk_write"]),
+            "net_read": _round_or_none(row["net_read"]),
+            "net_write": _round_or_none(row["net_write"]),
+            "swap_percent": _round_or_none(row["swap_percent"]),
+            "load1": _round_or_none(row["load1"]),
+            "load5": _round_or_none(row["load5"]),
+            "load15": _round_or_none(row["load15"]),
             "cpu_cores": json.loads(row["cpu_cores_json"]) if row["cpu_cores_json"] else None,
         }
-        for row in rows
-    ]
-    return jsonify({"count": len(metrics), "data": metrics})
+        if bucket:
+            for field in _AGG_FIELDS:
+                point[field] = _round_or_none(row[field])
+        metrics.append(point)
+
+    payload: Dict[str, Any] = {"count": len(metrics), "bucket_seconds": bucket, "data": metrics}
+    if hostname:
+        payload["latest_cpu_cores"] = get_latest_cpu_cores(hostname)
+    return jsonify(payload)
 
 
 @app.route("/details", methods=["GET"])

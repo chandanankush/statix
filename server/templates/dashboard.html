@@ -5,7 +5,8 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>System Metrics Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         :root {
             color-scheme: light;
@@ -1852,27 +1853,14 @@
         const applyChartStyles = (chart, styles) => {
             if (!chart) return;
 
-            if (chart.options?.scales?.x) {
-                chart.options.scales.x.ticks = {
-                    ...chart.options.scales.x.ticks,
-                    color: styles.text,
-                };
-                chart.options.scales.x.grid = {
-                    ...chart.options.scales.x.grid,
-                    color: styles.grid,
-                };
-            }
-
-            if (chart.options?.scales?.y) {
-                chart.options.scales.y.ticks = {
-                    ...chart.options.scales.y.ticks,
-                    color: styles.text,
-                };
-                chart.options.scales.y.grid = {
-                    ...chart.options.scales.y.grid,
-                    color: styles.grid,
-                };
-            }
+            // Set properties in place: spreading a Chart.js options proxy resolves
+            // function-valued options and throws on time scales.
+            ['x', 'y'].forEach((axis) => {
+                const scale = chart.options?.scales?.[axis];
+                if (!scale) return;
+                scale.ticks.color = styles.text;
+                scale.grid.color = styles.grid;
+            });
 
             if (chart.options?.plugins?.legend?.labels) {
                 chart.options.plugins.legend.labels.color = styles.text;
@@ -1933,6 +1921,25 @@
             });
         }
 
+        // Line charts plot at most a few hundred points: no markers, thin lines. Set before the
+        // charts exist, since element options resolved at construction are not refreshed later.
+        Chart.defaults.elements.point.radius = 0;
+        Chart.defaults.elements.point.hoverRadius = 3;
+        Chart.defaults.elements.line.borderWidth = 1.5;
+
+        // Real time scale: gaps stay gaps and ticks land on round times. Must be part of the
+        // chart config (the scale type cannot be switched after construction).
+        const TIME_X_AXIS = {
+            type: 'time',
+            time: {
+                tooltipFormat: 'MMM d, HH:mm:ss',
+                displayFormats: {
+                    second: 'HH:mm:ss', minute: 'HH:mm', hour: 'HH:mm',
+                    day: 'MMM d', week: 'MMM d', month: 'MMM yyyy',
+                },
+            },
+        };
+
         const chartConfig = (label, borderColor, backgroundColor) => ({
             type: 'line',
             data: {
@@ -1969,6 +1976,7 @@
                 },
                 scales: {
                     x: {
+                        ...TIME_X_AXIS,
                         ticks: {
                             autoSkip: true,
                             maxTicksLimit: 10,
@@ -2034,16 +2042,18 @@
             return 'rgba(6,182,212,0.8)';                   // cyan
         }
 
-        function updateCoreChart(metrics) {
-            const last = [...metrics].reverse().find(m => Array.isArray(m.cpu_cores));
-            if (!last) {
+        function updateCoreChart(metrics, latestCores) {
+            // Aggregated rows carry no per-core data; the server sends the newest sample separately.
+            const cores = Array.isArray(latestCores)
+                ? latestCores
+                : ([...metrics].reverse().find(m => Array.isArray(m.cpu_cores)) || {}).cpu_cores;
+            if (!cores) {
                 coreChart.data.labels = [];
                 coreChart.data.datasets[0].data = [];
                 coreChart.data.datasets[0].backgroundColor = [];
                 coreChart.update('none');
                 return;
             }
-            const cores = last.cpu_cores;
             coreChart.data.labels = cores.map((_, i) => `Core ${i}`);
             coreChart.data.datasets[0].data = cores;
             coreChart.data.datasets[0].backgroundColor = cores.map(_coreColor);
@@ -2076,6 +2086,7 @@
                 },
                 scales: {
                     x: {
+                        ...TIME_X_AXIS,
                         ticks: { autoSkip: true, maxTicksLimit: 10, color: currentChartStyles.text },
                         grid: { color: currentChartStyles.grid },
                     },
@@ -2126,6 +2137,7 @@
                 },
                 scales: {
                     x: {
+                        ...TIME_X_AXIS,
                         ticks: { autoSkip: true, maxTicksLimit: 10, color: currentChartStyles.text },
                         grid: { color: currentChartStyles.grid },
                     },
@@ -2184,6 +2196,7 @@
                 },
                 scales: {
                     x: {
+                        ...TIME_X_AXIS,
                         ticks: {
                             autoSkip: true,
                             maxTicksLimit: 10,
@@ -2249,6 +2262,7 @@
                 },
                 scales: {
                     x: {
+                        ...TIME_X_AXIS,
                         ticks: { autoSkip: true, maxTicksLimit: 10, color: currentChartStyles.text },
                         grid: { color: currentChartStyles.grid },
                     },
@@ -2261,6 +2275,18 @@
             },
         });
         charts.push(netChart);
+
+        // ── Time axis, peak series and stable Y scales ───────────────────────
+        // Points are {x: epoch ms, y}. The server downsamples long ranges, so no per-point styling is needed.
+        [cpuChart, loadChart, ramChart, diskChart, netChart].forEach((chart) => {
+            Object.assign(chart.options.scales.x.ticks, { source: 'auto', autoSkip: true, maxTicksLimit: 8, maxRotation: 0 });
+            chart.options.interaction = { mode: 'index', intersect: false };
+            chart.options.plugins.legend.labels.filter = (item) => !item.text.endsWith(' peak');
+            chart.data.datasets.forEach((ds) => {
+                ds.parsing = false;
+                ds.spanGaps = false;
+            });
+        });
         refreshChartTheme();
 
         function buildQueryParams() {
@@ -2282,18 +2308,6 @@
             }
             const date = new Date(ts * 1000);
             return date.toLocaleString();
-        }
-
-        function formatChartLabel(ts) {
-            if (!ts) return '';
-            const date = new Date(ts * 1000);
-            const timeframe = timeframeFilter.value;
-            // For longer timeframes, show month/day along with time
-            if (timeframe === '7d' || timeframe === '30d' || timeframe === '') {
-                return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-            }
-            // For same-day/short timeframes, only show the time
-            return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
         function ensureNotificationPermission() {
@@ -2398,12 +2412,6 @@
             return hostLastSeenMap;
         }
 
-        function updateChartData(chart, metrics, field) {
-            chart.data.labels = metrics.map(point => formatChartLabel(point.timestamp));
-            chart.data.datasets[0].data = metrics.map(point => point[field]);
-            chart.update('none');
-        }
-
         function toNonNegativeNumber(value) {
             const numeric = Number(value);
             if (Number.isNaN(numeric)) {
@@ -2412,38 +2420,117 @@
             return Math.max(0, numeric);
         }
 
-        function updateLoadChart(metrics) {
-            const labels = metrics.map(point => formatChartLabel(point.timestamp));
-            loadChart.data.labels = labels;
-            loadChart.data.datasets[0].data = metrics.map(point => point.load1  ?? null);
-            loadChart.data.datasets[1].data = metrics.map(point => point.load5  ?? null);
-            loadChart.data.datasets[2].data = metrics.map(point => point.load15 ?? null);
-            loadChart.update('none');
+        // Seconds per aggregation bucket in the last /data response; 0 = raw samples.
+        let lastBucketSeconds = 0;
+        // Highest Y ceiling seen per host+chart. Disk/Net/Load only ever grow it, so the
+        // scale stays put as values rise and fall.
+        const yHighWater = new Map();
+
+        const toMbps = (value) => toNonNegativeNumber(value) * 8;
+        const CHART_SERIES = {
+            cpu:  { chart: cpuChart,  series: [{ field: 'cpu', peak: 'cpu_max' }] },
+            load: { chart: loadChart, yFloor: 1, series: [{ field: 'load1' }, { field: 'load5' }, { field: 'load15' }] },
+            mem:  { chart: ramChart,  series: [
+                { field: 'ram', peak: 'ram_max', map: toNonNegativeNumber },
+                { field: 'swap_percent', peak: 'swap_percent_max', map: toNonNegativeNumber },
+            ] },
+            disk: { chart: diskChart, yFloor: 1, series: [
+                { field: 'disk_read', peak: 'disk_read_max', map: toNonNegativeNumber },
+                { field: 'disk_write', peak: 'disk_write_max', map: toNonNegativeNumber },
+            ] },
+            net:  { chart: netChart,  yFloor: 1, series: [
+                { field: 'net_read', peak: 'net_read_max', map: toMbps },
+                { field: 'net_write', peak: 'net_write_max', map: toMbps },
+            ] },
+        };
+
+        function niceCeil(value) {
+            if (!(value > 0)) return 1;
+            const pow = Math.pow(10, Math.floor(Math.log10(value)));
+            for (const step of [1, 2, 2.5, 5, 10]) {
+                if (step * pow >= value) return step * pow;
+            }
+            return 10 * pow;
         }
 
-        function updateMemoryChart(metrics) {
-            const labels = metrics.map(point => formatChartLabel(point.timestamp));
-            ramChart.data.labels = labels;
-            ramChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.ram));
-            ramChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.swap_percent));
-            ramChart.update('none');
+        function applyStableYMax(chart, id, floor) {
+            let peak = 0;
+            chart.data.datasets.forEach((ds) => ds.data.forEach((p) => { if (p.y > peak) peak = p.y; }));
+            const key = `${getEffectiveHostname() || ''}|${id}`;
+            const ceiling = Math.max(yHighWater.get(key) || 0, niceCeil(Math.max(peak, floor)));
+            yHighWater.set(key, ceiling);
+            chart.options.scales.y.min = 0;
+            chart.options.scales.y.max = ceiling;
         }
 
-        function updateDiskChart(metrics) {
-            const labels = metrics.map(point => formatChartLabel(point.timestamp));
-            diskChart.data.labels = labels;
-            diskChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.disk_read));
-            diskChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.disk_write));
-            diskChart.update('none');
+        // Peak datasets mirror the primary ones as faint dashed lines (hidden from the legend).
+        function ensurePeakDatasets(chart, count) {
+            if (chart.data.datasets.length > count) return;
+            for (let i = 0; i < count; i++) {
+                const base = chart.data.datasets[i];
+                chart.data.datasets.push({
+                    label: `${base.label} peak`,
+                    data: [],
+                    fill: false,
+                    borderColor: `${base.borderColor}80`,
+                    borderWidth: 1,
+                    borderDash: [4, 3],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    tension: 0,
+                    parsing: false,
+                    spanGaps: false,
+                });
+            }
         }
 
-        function updateNetChart(metrics) {
-            const labels = metrics.map(point => formatChartLabel(point.timestamp));
-            netChart.data.labels = labels;
-            netChart.data.datasets[0].data = metrics.map(point => toNonNegativeNumber(point.net_read) * 8);
-            netChart.data.datasets[1].data = metrics.map(point => toNonNegativeNumber(point.net_write) * 8);
-            netChart.update('none');
+        // One point per sample, with a null break wherever data is missing for longer than
+        // three bucket widths, so outages render as gaps instead of straight lines.
+        function buildPoints(metrics, field, map) {
+            const maxGap = Math.max(lastBucketSeconds * 3, 180);
+            const out = [];
+            let prev = null;
+            for (const m of metrics) {
+                if (prev !== null && m.timestamp - prev > maxGap) {
+                    out.push({ x: (prev + 1) * 1000, y: null });
+                }
+                const raw = m[field];
+                out.push({ x: m.timestamp * 1000, y: raw == null ? null : (map ? map(raw) : raw) });
+                prev = m.timestamp;
+            }
+            return out;
         }
+
+        function renderSeries(id, metrics) {
+            const { chart, series, yFloor } = CHART_SERIES[id];
+            const hasPeaks = series.some((s) => s.peak);
+            if (hasPeaks) ensurePeakDatasets(chart, series.length);
+            series.forEach((s, i) => {
+                chart.data.datasets[i].data = buildPoints(metrics, s.field, s.map);
+                if (hasPeaks) {
+                    chart.data.datasets[series.length + i].data =
+                        lastBucketSeconds > 0 ? buildPoints(metrics, s.peak, s.map) : [];
+                }
+            });
+            // Pin the X axis to the selected window so the range never rescales to the data.
+            const windowSeconds = timeframePresets[timeframeFilter.value];
+            const x = chart.options.scales.x;
+            if (windowSeconds) {
+                x.max = Date.now();
+                x.min = x.max - windowSeconds * 1000;
+            } else {
+                delete x.min;
+                delete x.max;
+            }
+            if (yFloor) applyStableYMax(chart, id, yFloor);
+            chart.update('none');
+        }
+
+        function updateChartData(chart, metrics, field) { renderSeries('cpu', metrics); }
+        function updateLoadChart(metrics) { renderSeries('load', metrics); }
+        function updateMemoryChart(metrics) { renderSeries('mem', metrics); }
+        function updateDiskChart(metrics) { renderSeries('disk', metrics); }
+        function updateNetChart(metrics) { renderSeries('net', metrics); }
 
         function setDetailField(key, value) {
             const element = detailElements[key];
@@ -3276,13 +3363,36 @@
             document.querySelector('.status').classList.toggle('host-offline', isOffline && !!timestamp);
         }
 
+        let fetchSeq = 0;
+        let fetchBusy = false;
+        let lastFetchStartedAt = 0;
+
+        // Chart data only changes when the agent reports (~30 s) and long ranges are
+        // bucketed, so poll slower the coarser the data is.
+        function pollIntervalMs() {
+            if (lastBucketSeconds <= 0) return 5000;
+            return lastBucketSeconds <= 300 ? 15000 : 30000;
+        }
+
+        // Timer entry point: never stacks a request on top of one still in flight.
+        function pollMetrics() {
+            if (fetchBusy || Date.now() - lastFetchStartedAt < pollIntervalMs()) return;
+            fetchMetrics();
+        }
+
         async function fetchMetrics() {
+            // User-triggered calls (host/timeframe change) supersede any request in flight;
+            // the older response is dropped when it lands.
+            const seq = ++fetchSeq;
+            fetchBusy = true;
+            lastFetchStartedAt = Date.now();
             try {
                 const hostStatusPromise = refreshHostStatus();
                 const autoMode = hostnameFilter.value === AUTO_CYCLE_VALUE;
                 const effectiveHostname = getEffectiveHostname();
 
                 if (autoMode && !effectiveHostname) {
+                    lastBucketSeconds = 0;
                     updateChartData(cpuChart, [], 'cpu');
                     updateCoreChart([]);
                     updateLoadChart([]);
@@ -3301,10 +3411,12 @@
                     throw new Error(`Request failed: ${response.status}`);
                 }
                 const payload = await response.json();
+                if (seq !== fetchSeq) return;
                 const metrics = payload.data || [];
+                lastBucketSeconds = payload.bucket_seconds || 0;
 
                 updateChartData(cpuChart, metrics, 'cpu');
-                updateCoreChart(metrics);
+                updateCoreChart(metrics, payload.latest_cpu_cores);
                 updateLoadChart(metrics);
                 updateMemoryChart(metrics);
                 updateDiskChart(metrics);
@@ -3319,6 +3431,8 @@
                 }
             } catch (error) {
                 console.error('Failed to update charts', error);
+            } finally {
+                if (seq === fetchSeq) fetchBusy = false;
             }
         }
 
@@ -3350,7 +3464,7 @@
                 hideDetails();
             }
         });
-        timeframeFilter.addEventListener('change', fetchMetrics);
+        timeframeFilter.addEventListener('change', () => fetchMetrics());
 
         if (timeframeFilter.value === '' && timeframePresets[defaultTimeframe]) {
             timeframeFilter.value = defaultTimeframe;
@@ -3647,7 +3761,7 @@
             await checkServerVersion();
             initWidgetSystem();
             loadHosts();
-            setInterval(fetchMetrics, 1000);
+            setInterval(pollMetrics, 1000);
         })();
     </script>
 </body>
