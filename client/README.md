@@ -136,7 +136,16 @@ Returns a full snapshot of the host. Example response:
         "state": "running",
         "status": "Up 4 minutes",
         "ports": "0.0.0.0:5050->5000/tcp",
-        "update_available": false
+        "update_available": false,
+        "stats": {
+          "cpu_pct": 0.42,
+          "mem_pct": 1.2,
+          "mem_used_bytes": 98566144,
+          "mem_limit_bytes": 8589934592,
+          "mem_source": "cgroup",
+          "net_rx_bytes": 1260000,
+          "net_tx_bytes": 4910000
+        }
       }
     ]
   },
@@ -146,6 +155,7 @@ Returns a full snapshot of the host. Example response:
 
 **Notes:**
 - `cpu.temperature_c` — `null` on Apple Silicon or when no sensor is readable. On Raspberry Pi, reads `psutil.sensors_temperatures()` first; if that returns nothing (e.g. in a restricted systemd user service), falls back to `/sys/class/thermal/thermal_zone0/temp`. On macOS Intel install `brew install osx-cpu-temp` to enable it.
+- `docker.containers[].stats` — running containers only. `mem_source` is `"cgroup"` (Docker's own accounting), `"rss"` (estimate: summed RSS of the container's process tree; Linux only), or `null` (no data; the memory fields are then `null`, never `0`). The `rss` fallback applies when Docker reports `0B / 0B`, which happens on kernels booted with the memory cgroup disabled — the Raspberry Pi OS default (`cgroup_disable=memory` in `/boot/firmware/cmdline.txt`; `docker info` warns "No memory limit support"). RSS counts shared pages in each process, so multi-process containers read slightly high; `mem_limit_bytes` is then the host's total RAM. To get exact Docker accounting on a Pi, replace `cgroup_disable=memory` with `cgroup_enable=memory cgroup_memory=1` and reboot.
 - `network.interfaces` — all active (up, non-loopback, IPv4) interfaces. Entire list is cached for 5 minutes.
 - `system.os_update` — cached 24 h. `count` is the number of pending updates; `source` is `softwareupdate` (macOS), `apt` (Debian/RPi via `apt list --upgradable`), or `dnf`/`yum`.
 - `statix_client_version` — short git SHA of the installed commit (written by the installer to `~/.local/share/statix/client_version`). Falls back to `"dev"` when running from source. Used by the dashboard to detect stale clients.

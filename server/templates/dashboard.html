@@ -697,99 +697,120 @@
             }
         }
 
-        .docker-container-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: 12px;
-            max-height: 460px;
-            overflow-y: auto;
-        }
-
         [data-widget="docker"] {
             grid-column: 1 / -1;
         }
 
-        .docker-container-item {
+        .docker-summary {
             display: flex;
-            flex-direction: column;
-            padding: 8px 10px;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .docker-chip {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 4px 10px;
             border-radius: 8px;
             background: var(--color-progress-bg);
-            gap: 0;
+            font-size: 0.82rem;
         }
-        .docker-container-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        }
-        .docker-container-stats {
-            display: flex;
-            gap: 10px;
-            margin-top: 8px;
-        }
-        .docker-stat {
-            flex: 1;
-            min-width: 0;
-        }
-        .docker-stat-label {
-            font-size: 0.67rem;
+        .docker-chip-label {
+            font-size: 0.68rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--color-card-muted);
-            margin-bottom: 3px;
         }
-        .docker-stat-bar {
+        .docker-chip-value { font-weight: 600; color: var(--color-card-text); }
+
+        /* One line per container; columns line up across rows. */
+        .docker-container-list {
+            margin-top: 12px;
+            max-height: 560px;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        .docker-row {
+            display: grid;
+            grid-template-columns: minmax(150px, 2.2fr) minmax(130px, 1.5fr) minmax(90px, 1fr) minmax(120px, 1.2fr) minmax(110px, 1.1fr) minmax(110px, 1.4fr);
+            align-items: center;
+            gap: 14px;
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--color-card-border);
+        }
+        .docker-row:last-child { border-bottom: 0; }
+        .docker-row-head {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            background: var(--color-card-bg, var(--color-progress-bg));
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-card-muted);
+        }
+        .docker-row-off { opacity: 0.72; }
+        .docker-cell {
+            min-width: 0;
+            font-size: 0.8rem;
+            color: var(--color-card-text);
+        }
+        .docker-cell-sub {
+            font-size: 0.72rem;
+            color: var(--color-card-muted);
+        }
+        .docker-cell-sub,
+        .docker-container-name,
+        .docker-container-image,
+        .docker-meter-value,
+        .docker-cell-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .docker-cell-text { color: var(--color-card-muted); }
+        .docker-container-name {
+            font-weight: 600;
+            font-size: 0.88rem;
+        }
+        .docker-container-image {
+            font-size: 0.74rem;
+            color: var(--color-card-muted);
+        }
+        .docker-state-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+        .docker-meter-bar {
             height: 4px;
             border-radius: 2px;
             background: color-mix(in srgb, var(--color-card-muted) 20%, transparent);
             overflow: hidden;
             margin-bottom: 3px;
         }
-        .docker-stat-fill {
+        .docker-meter-fill {
             height: 100%;
             border-radius: 2px;
             transition: width 0.3s ease;
         }
-        .docker-stat-value {
-            font-size: 0.75rem;
-            color: var(--color-card-text);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+        .docker-meter-value { font-size: 0.78rem; }
+        .docker-na { color: var(--color-card-muted); cursor: help; }
+        .docker-approx { cursor: help; }
 
         .network-iface-separator {
             border-top: 1px solid var(--color-card-border);
             margin: 10px 0;
         }
 
-        .docker-container-info {
-            min-width: 0;
-        }
-
-        .docker-container-name {
-            font-weight: 600;
-            font-size: 0.9rem;
-            color: var(--color-card-text);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .docker-container-image {
-            font-size: 0.82rem;
-            color: var(--color-card-muted);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
         .docker-state-badge {
-            padding: 3px 8px;
+            padding: 2px 8px;
             border-radius: 6px;
-            font-size: 0.8rem;
+            font-size: 0.74rem;
             font-weight: 600;
             white-space: nowrap;
             flex-shrink: 0;
@@ -1205,11 +1226,15 @@
                 text-align: left;
             }
 
-            /* docker container items: wrap badge below name */
-            .docker-container-item {
-                flex-wrap: wrap;
-                gap: 6px;
+            /* docker table: keep Container / State / CPU / Memory */
+            .docker-row {
+                grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.3fr);
+                gap: 8px;
+                padding-left: 4px;
+                padding-right: 4px;
             }
+            .docker-col-net,
+            .docker-col-ports { display: none; }
 
             /* threshold rows: stack inputs below label */
             .threshold-row,
@@ -1413,6 +1438,7 @@
                             <span class="stat-value" id="dockerStatus">—</span>
                         </div>
                     </div>
+                    <div class="docker-summary" id="dockerSummary"></div>
                     <div class="docker-container-list" id="dockerContainerList"></div>
                 </div>
             </article>
@@ -2675,6 +2701,7 @@
             if (!docker) {
                 if (statusEl) statusEl.textContent = '—';
                 if (listEl) { while (listEl.firstChild) listEl.removeChild(listEl.firstChild); }
+                renderDockerSummary([]);
                 return;
             }
 
@@ -2687,6 +2714,7 @@
                 };
                 if (statusEl) statusEl.textContent = errorLabels[docker.error] || 'Unavailable';
                 if (listEl) { while (listEl.firstChild) listEl.removeChild(listEl.firstChild); }
+                renderDockerSummary([]);
                 return;
             }
 
@@ -2697,100 +2725,220 @@
             if (!listEl) return;
             while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
 
-            const containers = docker.containers || [];
+            // Running containers first, then by name.
+            const containers = (docker.containers || []).slice().sort((x, y) => {
+                const xr = (x.state || '').toLowerCase() === 'running' ? 0 : 1;
+                const yr = (y.state || '').toLowerCase() === 'running' ? 0 : 1;
+                return xr - yr || (x.name || '').localeCompare(y.name || '');
+            });
+
+            renderDockerSummary(containers);
+
+            const head = dockerRow(true);
+            [['Container', ''], ['State', ''], ['CPU', ''], ['Memory', ''], ['Network', 'docker-col-net'], ['Ports', 'docker-col-ports']]
+                .forEach(([label, extra]) => {
+                    const cell = dockerCell(extra);
+                    cell.textContent = label;
+                    head.appendChild(cell);
+                });
+            listEl.appendChild(head);
+
             containers.forEach(container => {
-                const item = document.createElement('div');
-                item.className = 'docker-container-item';
+                const state = (container.state || '').toLowerCase();
+                const running = state === 'running';
+                const s = running ? container.stats : null;
+                const row = dockerRow(false);
+                if (!running) row.classList.add('docker-row-off');
 
-                // header row: info + state badge
-                const header = document.createElement('div');
-                header.className = 'docker-container-header';
-
-                const info = document.createElement('div');
-                info.className = 'docker-container-info';
-
+                // Container: name, image, update badge
+                const nameCell = dockerCell('');
                 const nameEl = document.createElement('div');
                 nameEl.className = 'docker-container-name';
                 nameEl.textContent = container.name || container.id || '—';
-
+                nameEl.title = container.name || '';
                 const imageEl = document.createElement('div');
                 imageEl.className = 'docker-container-image';
                 imageEl.textContent = container.image || '—';
+                imageEl.title = container.image || '';
+                nameCell.appendChild(nameEl);
+                nameCell.appendChild(imageEl);
+                row.appendChild(nameCell);
 
-                if (container.update_available === true) {
-                    const updEl = document.createElement('span');
-                    updEl.className = 'update-badge update-badge-available';
-                    updEl.textContent = '↑ Update available';
-                    imageEl.appendChild(document.createTextNode(' '));
-                    imageEl.appendChild(updEl);
-                } else if (container.update_available === false) {
-                    const updEl = document.createElement('span');
-                    updEl.className = 'update-badge update-badge-uptodate';
-                    updEl.textContent = 'Up to date';
-                    imageEl.appendChild(document.createTextNode(' '));
-                    imageEl.appendChild(updEl);
-                }
-
-                info.appendChild(nameEl);
-                info.appendChild(imageEl);
-
-                const state = (container.state || '').toLowerCase();
-                const validStates = ['running', 'exited', 'paused'];
+                // State: badge + uptime/health text, update badge
+                const stateCell = dockerCell('');
+                const stateLine = document.createElement('div');
+                stateLine.className = 'docker-state-line';
                 const badge = document.createElement('span');
+                const validStates = ['running', 'exited', 'paused'];
                 badge.className = `docker-state-badge docker-state-${validStates.includes(state) ? state : 'other'}`;
                 badge.textContent = container.state || '—';
-
-                header.appendChild(info);
-                header.appendChild(badge);
-                item.appendChild(header);
-
-                // stats row: CPU + memory bars (running containers only)
-                const s = container.stats;
-                if (s && state === 'running') {
-                    const statsRow = document.createElement('div');
-                    statsRow.className = 'docker-container-stats';
-
-                    function makeStat(label, pct, valueText, fillColor) {
-                        const wrap = document.createElement('div');
-                        wrap.className = 'docker-stat';
-                        const lbl = document.createElement('div');
-                        lbl.className = 'docker-stat-label';
-                        lbl.textContent = label;
-                        const bar = document.createElement('div');
-                        bar.className = 'docker-stat-bar';
-                        const fill = document.createElement('div');
-                        fill.className = 'docker-stat-fill';
-                        fill.style.width = `${Math.min(100, Math.max(0, pct || 0))}%`;
-                        fill.style.background = fillColor;
-                        bar.appendChild(fill);
-                        const val = document.createElement('div');
-                        val.className = 'docker-stat-value';
-                        val.textContent = valueText;
-                        wrap.appendChild(lbl);
-                        wrap.appendChild(bar);
-                        wrap.appendChild(val);
-                        return wrap;
-                    }
-
-                    if (typeof s.cpu_pct === 'number') {
-                        const p = s.cpu_pct;
-                        const color = p >= 80 ? '#ef4444' : p >= 50 ? '#f59e0b' : '#06b6d4';
-                        statsRow.appendChild(makeStat('CPU', p, `${p.toFixed(2)}%`, color));
-                    }
-                    if (typeof s.mem_pct === 'number') {
-                        const p = s.mem_pct;
-                        const color = p >= 90 ? '#ef4444' : p >= 70 ? '#f59e0b' : '#36a2eb';
-                        let memText = `${p.toFixed(1)}%`;
-                        if (s.mem_used_bytes && s.mem_limit_bytes) {
-                            memText = `${formatBytes(s.mem_used_bytes)} / ${formatBytes(s.mem_limit_bytes)}`;
-                        }
-                        statsRow.appendChild(makeStat('MEM', p, memText, color));
-                    }
-
-                    if (statsRow.children.length > 0) item.appendChild(statsRow);
+                stateLine.appendChild(badge);
+                if (container.update_available === true) {
+                    const upd = document.createElement('span');
+                    upd.className = 'update-badge update-badge-available';
+                    upd.textContent = '↑ Update';
+                    upd.title = 'A newer image is available';
+                    stateLine.appendChild(upd);
                 }
+                stateCell.appendChild(stateLine);
+                const statusEl = document.createElement('div');
+                statusEl.className = 'docker-cell-sub';
+                statusEl.textContent = container.status || '';
+                statusEl.title = container.status || '';
+                stateCell.appendChild(statusEl);
+                row.appendChild(stateCell);
 
-                                listEl.appendChild(item);
+                // CPU
+                const cpuCell = dockerCell('');
+                if (s && typeof s.cpu_pct === 'number') {
+                    const p = s.cpu_pct;
+                    cpuCell.appendChild(dockerMeter(p, `${p.toFixed(2)}%`,
+                        p >= 80 ? '#ef4444' : p >= 50 ? '#f59e0b' : '#06b6d4'));
+                } else {
+                    cpuCell.appendChild(dockerPlaceholder('—', ''));
+                }
+                row.appendChild(cpuCell);
+
+                // Memory: cgroup value, process-RSS estimate (~), or n/a
+                const memCell = dockerCell('');
+                if (!s) {
+                    memCell.appendChild(dockerPlaceholder('—', ''));
+                } else if (dockerMemoryUnavailable(s)) {
+                    memCell.appendChild(dockerPlaceholder('n/a',
+                        'Docker has no memory accounting on this host (memory cgroup disabled).'));
+                } else {
+                    const p = s.mem_pct;
+                    const approx = s.mem_source === 'rss';
+                    const color = p >= 90 ? '#ef4444' : p >= 70 ? '#f59e0b' : '#36a2eb';
+                    const used = formatBytes(s.mem_used_bytes);
+                    const text = approx ? `~${used} (${p.toFixed(1)}%)`
+                        : (s.mem_limit_bytes ? `${used} / ${formatBytes(s.mem_limit_bytes)}` : `${p.toFixed(1)}%`);
+                    const meter = dockerMeter(p, text, color);
+                    if (approx) {
+                        meter.title = 'Estimate: summed process memory (RSS) of the container. ' +
+                            'Docker has no memory accounting on this host (memory cgroup disabled).';
+                        meter.classList.add('docker-approx');
+                    }
+                    memCell.appendChild(meter);
+                }
+                row.appendChild(memCell);
+
+                // Network: cumulative bytes received / sent since the container started
+                const netCell = dockerCell('docker-col-net');
+                if (s && typeof s.net_rx_bytes === 'number' && typeof s.net_tx_bytes === 'number') {
+                    const line = document.createElement('div');
+                    line.className = 'docker-meter-value';
+                    line.textContent = `↓ ${formatBytes(s.net_rx_bytes)}  ↑ ${formatBytes(s.net_tx_bytes)}`;
+                    line.title = 'Received / sent since the container started';
+                    netCell.appendChild(line);
+                } else {
+                    netCell.appendChild(dockerPlaceholder('—', ''));
+                }
+                row.appendChild(netCell);
+
+                // Ports: published host→container mappings
+                const portsCell = dockerCell('docker-col-ports');
+                const ports = formatDockerPorts(container.ports);
+                const portsEl = document.createElement('div');
+                portsEl.className = 'docker-cell-text';
+                portsEl.textContent = ports.text;
+                portsEl.title = container.ports || '';
+                portsCell.appendChild(portsEl);
+                row.appendChild(portsCell);
+
+                listEl.appendChild(row);
+            });
+        }
+
+        function dockerRow(isHead) {
+            const row = document.createElement('div');
+            row.className = isHead ? 'docker-row docker-row-head' : 'docker-row';
+            return row;
+        }
+
+        function dockerCell(extraClass) {
+            const cell = document.createElement('div');
+            cell.className = extraClass ? `docker-cell ${extraClass}` : 'docker-cell';
+            return cell;
+        }
+
+        function dockerPlaceholder(text, title) {
+            const el = document.createElement('div');
+            el.className = 'docker-meter-value docker-na';
+            el.textContent = text;
+            if (title) el.title = title;
+            return el;
+        }
+
+        function dockerMeter(pct, text, color) {
+            const wrap = document.createElement('div');
+            const bar = document.createElement('div');
+            bar.className = 'docker-meter-bar';
+            const fill = document.createElement('div');
+            fill.className = 'docker-meter-fill';
+            fill.style.width = `${Math.min(100, Math.max(0, pct || 0))}%`;
+            fill.style.background = color;
+            bar.appendChild(fill);
+            const val = document.createElement('div');
+            val.className = 'docker-meter-value';
+            val.textContent = text;
+            wrap.appendChild(bar);
+            wrap.appendChild(val);
+            return wrap;
+        }
+
+        // Older clients send a literal 0 used / 0 limit when Docker has no memory accounting;
+        // newer ones send null. Both mean "unknown", never 0%.
+        function dockerMemoryUnavailable(s) {
+            if (s.mem_source === null) return true;
+            if (typeof s.mem_pct !== 'number') return true;
+            return s.mem_source === undefined && !s.mem_limit_bytes && !s.mem_used_bytes;
+        }
+
+        // "0.0.0.0:3030->3000/tcp, [::]:3030->3000/tcp, 80/tcp" -> "3030→3000". Unpublished
+        // exposed ports are omitted; IPv4/IPv6 duplicates collapse into one.
+        function formatDockerPorts(raw) {
+            const seen = new Set();
+            String(raw || '').split(',').forEach((part) => {
+                const m = part.trim().match(/:(\d+(?:-\d+)?)->(\d+(?:-\d+)?)\/(\w+)$/);
+                if (m) seen.add(m[1] === m[2] ? m[1] : `${m[1]}→${m[2]}`);
+            });
+            const list = Array.from(seen);
+            if (!list.length) return { text: '—' };
+            return { text: list.length > 3 ? `${list.slice(0, 3).join(', ')} +${list.length - 3}` : list.join(', ') };
+        }
+
+        function renderDockerSummary(containers) {
+            const el = document.getElementById('dockerSummary');
+            if (!el) return;
+            while (el.firstChild) el.removeChild(el.firstChild);
+            const active = containers.filter(c => (c.state || '').toLowerCase() === 'running' && c.stats);
+            if (!active.length) return;
+
+            const sum = (fn) => active.reduce((n, c) => n + (fn(c.stats) || 0), 0);
+            const memKnown = active.filter(c => !dockerMemoryUnavailable(c.stats));
+            const memText = memKnown.length
+                ? `${memKnown.some(c => c.stats.mem_source === 'rss') ? '~' : ''}${formatBytes(
+                    memKnown.reduce((n, c) => n + c.stats.mem_used_bytes, 0))}`
+                : 'n/a';
+            const chips = [
+                ['CPU', `${sum(st => (typeof st.cpu_pct === 'number' ? st.cpu_pct : 0)).toFixed(1)}%`],
+                ['Memory', memText],
+                ['Net ↓', formatBytes(sum(st => st.net_rx_bytes))],
+                ['Net ↑', formatBytes(sum(st => st.net_tx_bytes))],
+            ];
+            chips.forEach(([label, value]) => {
+                const chip = document.createElement('span');
+                chip.className = 'docker-chip';
+                const l = document.createElement('span');
+                l.className = 'docker-chip-label';
+                l.textContent = label;
+                const v = document.createElement('span');
+                v.className = 'docker-chip-value';
+                v.textContent = value;
+                chip.appendChild(l);
+                chip.appendChild(v);
+                el.appendChild(chip);
             });
         }
 
